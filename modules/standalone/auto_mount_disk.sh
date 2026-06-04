@@ -121,7 +121,7 @@ choose_disk() {
     local selected=0
 
     [ "${#CANDIDATE_DISKS[@]}" -gt 0 ] || return 1
-    select_menu "选择要挂载的数据盘" CANDIDATE_LABELS selected || return 1
+    select_menu "$(scriptkit_step_title "选择要挂载的数据盘")" CANDIDATE_LABELS selected || return 1
     printf '%s' "${CANDIDATE_DISKS[$selected]}"
 }
 
@@ -129,7 +129,7 @@ choose_filesystem() {
     local selected=0
     local -a filesystems=("ext4" "xfs" "btrfs")
 
-    select_menu "选择文件系统" filesystems selected || return 1
+    select_menu "$(scriptkit_step_title "选择文件系统")" filesystems selected || return 1
     printf '%s' "${filesystems[$selected]}"
 }
 
@@ -213,6 +213,7 @@ main() {
 
     check_root
     ensure_commands lsblk blkid findmnt mount awk mkdir mktemp parted "partprobe:parted" || exit 1
+    draw_current_title "自动挂载数据盘"
 
     collect_candidate_disks
     if [ "${#CANDIDATE_DISKS[@]}" -eq 0 ]; then

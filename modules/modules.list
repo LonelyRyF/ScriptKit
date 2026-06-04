@@ -9,6 +9,7 @@ test.sh
 reinstall.sh
 
 # Shared library (sourced by standalone scripts)
+runtime.sh
 lib.sh
 
 # Standalone scripts used by add_script entries

@@ -142,7 +142,7 @@ main() {
 
     check_root
 
-    printf "%b== 主机名管理 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    draw_current_title "主机名管理"
     current_hostname="$(hostname 2>/dev/null || true)"
     printf "当前主机名: %s\n" "${current_hostname:-unknown}"
     printf '%b' "$(msg_prompt "输入" "新的主机名: ")"

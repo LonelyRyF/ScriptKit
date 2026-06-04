@@ -108,10 +108,40 @@ manage_service_logs() {
     journalctl -u "$service" -n "$lines" --no-pager -o short-iso
 }
 
+manage_linux_mirrors_official_run() {
+    run_standalone_with_env "modules/standalone/change_linux_mirrors.sh" "SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX=0"
+}
+
+manage_linux_mirrors_github_run() {
+    run_standalone_with_env "modules/standalone/change_linux_mirrors.sh" "SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX=1"
+}
+
+manage_linux_mirrors_gitee_run() {
+    run_standalone_with_env "modules/standalone/change_linux_mirrors.sh" "SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX=2"
+}
+
+manage_linux_mirrors_gitcode_run() {
+    run_standalone_with_env "modules/standalone/change_linux_mirrors.sh" "SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX=3"
+}
+
+manage_linux_mirrors_jsdelivr_run() {
+    run_standalone_with_env "modules/standalone/change_linux_mirrors.sh" "SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX=4"
+}
+
+manage_linux_mirrors_edgeone_run() {
+    run_standalone_with_env "modules/standalone/change_linux_mirrors.sh" "SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX=5"
+}
+
 add_action "manage_service_status" "查看服务状态" "manage" "manage_service_status"
 add_action "manage_failed_services" "查看失败服务" "manage" "manage_failed_services"
 add_action "manage_service_logs" "查看服务日志" "manage" "manage_service_logs"
 add_script "manage_hostname" "主机名管理" "manage" "modules/standalone/manage_hostname.sh"
 add_script "manage_services" "Systemd 服务管理" "manage" "modules/standalone/manage_services.sh"
-add_script "manage_linux_mirrors" "LinuxMirrors 换源" "manage" "modules/standalone/change_linux_mirrors.sh"
+add_menu "manage_linux_mirrors" "LinuxMirrors 换源" "manage"
+add_action "manage_linux_mirrors_official" "Official" "manage_linux_mirrors" "manage_linux_mirrors_official_run"
+add_action "manage_linux_mirrors_github" "GitHub raw" "manage_linux_mirrors" "manage_linux_mirrors_github_run"
+add_action "manage_linux_mirrors_gitee" "Gitee raw（国内推荐）" "manage_linux_mirrors" "manage_linux_mirrors_gitee_run"
+add_action "manage_linux_mirrors_gitcode" "GitCode raw（可能延迟）" "manage_linux_mirrors" "manage_linux_mirrors_gitcode_run"
+add_action "manage_linux_mirrors_jsdelivr" "jsDelivr CDN" "manage_linux_mirrors" "manage_linux_mirrors_jsdelivr_run"
+add_action "manage_linux_mirrors_edgeone" "EdgeOne" "manage_linux_mirrors" "manage_linux_mirrors_edgeone_run"
 add_script "manage_auto_mount_disk" "自动挂载数据盘" "manage" "modules/standalone/auto_mount_disk.sh"

@@ -35,7 +35,8 @@ collect_disks() {
 }
 
 show_disk_inventory() {
-    printf "\n%b== 当前块设备 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    printf "\n"
+    draw_step_title "当前块设备"
     if [ "${#DISKS[@]}" -eq 0 ]; then
         printf "未发现可用块设备。\n"
         return 1
@@ -208,7 +209,7 @@ main() {
         exit 1
     }
 
-    printf "\n%b== Hard Disk Sentinel ========================================%b\n\n" "$BOLD" "$PLAIN"
+    draw_current_title "磁盘健康检测"
     output="$("$binary" 2>&1)"
     rc=$?
     printf '%s\n' "$output"

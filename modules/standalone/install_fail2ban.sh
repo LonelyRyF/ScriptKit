@@ -69,7 +69,7 @@ get_ssh_port() {
 main() {
     check_root
 
-    printf "%b========== 安装 Fail2Ban ==========%b\n\n" "$BOLD" "$PLAIN"
+    draw_current_title "安装 Fail2Ban"
 
     # 检查是否已安装
     if command -v fail2ban-client &>/dev/null; then

@@ -171,8 +171,29 @@ main() {
         "退出"
     )
 
+    case "${SCRIPTKIT_TERMINAL_SETUP_MODE:-}" in
+        apply)
+            draw_current_title "终端优化"
+            if yesno_select "确认更新当前用户的 ~/.bashrc 配置？" "y"; then
+                apply_setup || exit 1
+            else
+                msg_info "已取消"
+            fi
+            return
+            ;;
+        restore)
+            draw_current_title "终端优化"
+            if yesno_select "确认恢复最近一次 ~/.bashrc 备份？"; then
+                restore_latest_backup || exit 1
+            else
+                msg_info "已取消"
+            fi
+            return
+            ;;
+    esac
+
     while true; do
-        if ! select_menu "终端优化" menu_labels selected 0; then
+        if ! select_menu "$(scriptkit_current_title "终端优化")" menu_labels selected 0; then
             msg_info "已取消"
             exit 0
         fi

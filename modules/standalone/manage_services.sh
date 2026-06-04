@@ -330,7 +330,7 @@ main() {
     require_systemctl || exit 1
 
     while true; do
-        printf "%b== Systemd 服务管理 ========================================%b\n\n" "$BOLD" "$PLAIN"
+        draw_current_title "Systemd 服务管理"
         printf '%b' "$(msg_prompt "输入" "输入关键词过滤服务（回车列全部，q 退出）: ")"
         read -r filter
         case "$filter" in

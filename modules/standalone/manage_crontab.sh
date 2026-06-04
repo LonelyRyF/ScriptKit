@@ -481,8 +481,37 @@ main() {
     local choice=""
 
     require_crontab || exit 1
+
+    case "${SCRIPTKIT_CRONTAB_MODE:-}" in
+        view)
+            draw_current_title "Crontab 管理"
+            show_crontab
+            return
+            ;;
+        add)
+            draw_current_title "Crontab 管理"
+            add_crontab_job
+            return
+            ;;
+        delete)
+            draw_current_title "Crontab 管理"
+            delete_crontab_job
+            return
+            ;;
+        backups)
+            draw_current_title "Crontab 管理"
+            show_crontab_backups
+            return
+            ;;
+        restore)
+            draw_current_title "Crontab 管理"
+            restore_crontab_backup
+            return
+            ;;
+    esac
+
     while true; do
-        draw_title_bar "Crontab 管理"
+        draw_current_title "Crontab 管理"
         printf "  1) 查看任务\n"
         printf "  2) 添加任务\n"
         printf "  3) 删除任务\n"

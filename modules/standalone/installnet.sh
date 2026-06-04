@@ -51,7 +51,7 @@ pick_from_options() {
     local selected=0
     local -a options=("$@")
 
-    select_menu "$title" options selected || return 1
+    select_menu "$(scriptkit_step_title "$title")" options selected || return 1
     printf '%s' "${options[$selected]}"
 }
 
@@ -209,7 +209,7 @@ build_command_args() {
 print_summary() {
     local arg=""
 
-    printf "%b== InstallNET 参数 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    draw_step_title "参数确认"
     printf "系统: %s\n" "$SYSTEM"
     [ -n "$VERSION" ] && printf "版本: %s\n" "$VERSION"
     [ -n "$ARCH_FLAG" ] && printf "架构: %s\n" "$ARCH_FLAG"
@@ -254,6 +254,7 @@ main() {
         exit 1
     }
 
+    draw_current_title "InstallNET 重装系统"
     msg_warn "这是高危操作，执行后会格式化系统盘并重装系统。"
     select_system
     select_version

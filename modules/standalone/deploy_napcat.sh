@@ -77,7 +77,7 @@ select_github_proxy_value() {
         menu_labels+=("代理 $((i + 1))"$'\n'"${NAPCAT_GITHUB_PROXIES[$i]}")
     done
 
-    if ! select_menu "选择 GitHub 下载线路" menu_labels selected 0; then
+    if ! select_menu "$(scriptkit_step_title "选择 GitHub 下载线路")" menu_labels selected 0; then
         msg_info "已取消"
         return 1
     fi
@@ -105,7 +105,7 @@ select_docker_proxy_value() {
         menu_labels+=("代理 $((i + 1))"$'\n'"${NAPCAT_DOCKER_PROXIES[$i]}")
     done
 
-    if ! select_menu "选择 Docker 镜像线路" menu_labels selected 0; then
+    if ! select_menu "$(scriptkit_step_title "选择 Docker 镜像线路")" menu_labels selected 0; then
         msg_info "已取消"
         return 1
     fi
@@ -142,7 +142,7 @@ select_mode_value() {
         "reverse_http"$'\n'"反向 HTTP 模式"
     )
 
-    if ! select_menu "选择运行模式" menu_labels selected 0; then
+    if ! select_menu "$(scriptkit_step_title "选择运行模式")" menu_labels selected 0; then
         msg_info "已取消"
         return 1
     fi
@@ -198,7 +198,7 @@ run_general_install() {
     local proxy_value=""
     local -a installer_args=("--docker" "n")
 
-    draw_title_bar "NapCat 通用安装"
+    draw_step_title "通用安装"
     if yesno_select "安装 NapCat TUI-CLI？"; then
         cli_enabled="y"
     fi
@@ -218,7 +218,7 @@ run_visual_install() {
     local proxy_value=""
     local -a installer_args=("--tui")
 
-    draw_title_bar "NapCat 可视化安装"
+    draw_step_title "可视化安装"
     select_github_proxy_value proxy_value || return 0
     [ -n "$proxy_value" ] && installer_args+=("--proxy" "$proxy_value")
 
@@ -231,7 +231,7 @@ run_docker_install() {
     local proxy_value=""
     local -a installer_args=("--docker" "y")
 
-    draw_title_bar "NapCat Docker 安装"
+    draw_step_title "Docker 安装"
     prompt_qq_value qq_number
     select_mode_value mode_value || return 0
     select_docker_proxy_value proxy_value || return 0
@@ -251,7 +251,7 @@ select_install_method() {
         "Docker 安装"$'\n'"容器化部署，执行前会询问 QQ 号和模式"
     )
 
-    if ! select_menu "NapCat 部署方式" menu_labels selected 0; then
+    if ! select_menu "$(scriptkit_step_title "部署方式")" menu_labels selected 0; then
         msg_info "已取消"
         return 0
     fi
@@ -267,7 +267,21 @@ main() {
     if [ "$(id -u)" -ne 0 ]; then
         msg_warn "建议使用 root 或具备 sudo 权限的用户运行安装脚本。"
     fi
-    select_install_method
+
+    case "${SCRIPTKIT_NAPCAT_MODE:-}" in
+        general)
+            run_general_install
+            ;;
+        visual)
+            run_visual_install
+            ;;
+        docker)
+            run_docker_install
+            ;;
+        *)
+            select_install_method
+            ;;
+    esac
 }
 
 main

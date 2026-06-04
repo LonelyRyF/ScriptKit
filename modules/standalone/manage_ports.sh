@@ -284,8 +284,21 @@ main() {
         "退出"
     )
 
+    case "${SCRIPTKIT_MANAGE_PORTS_MODE:-}" in
+        terminate)
+            draw_current_title "端口管理"
+            terminate_port_processes
+            return
+            ;;
+        block)
+            draw_current_title "端口管理"
+            block_ports_firewall
+            return
+            ;;
+    esac
+
     while true; do
-        if ! select_menu "端口管理" menu_labels selected 0; then
+        if ! select_menu "$(scriptkit_current_title "端口管理")" menu_labels selected 0; then
             msg_info "已取消"
             return 0
         fi

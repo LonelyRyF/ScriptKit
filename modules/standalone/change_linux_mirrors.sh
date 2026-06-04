@@ -51,11 +51,21 @@ select_source_url() {
         menu_labels+=("${LINUXMIRRORS_LABELS[$i]}"$'\n'"${LINUXMIRRORS_URLS[$i]}")
     done
 
-    if ! select_menu "LinuxMirrors 换源" menu_labels selected 2; then
+    if ! select_menu "$(scriptkit_step_title "选择换源入口")" menu_labels selected 2; then
         return 1
     fi
 
     printf '%s' "${LINUXMIRRORS_URLS[$selected]}"
+}
+
+source_url_from_index() {
+    local index="$1"
+
+    if ! [[ "$index" =~ ^[0-9]+$ ]] || [ "$index" -lt 0 ] || [ "$index" -ge "${#LINUXMIRRORS_URLS[@]}" ]; then
+        return 1
+    fi
+
+    printf '%s' "${LINUXMIRRORS_URLS[$index]}"
 }
 
 run_linuxmirrors() {
@@ -98,7 +108,17 @@ main() {
     local url=""
 
     require_root_action || exit 1
-    url="$(select_source_url)" || exit 1
+    draw_current_title "LinuxMirrors 换源"
+
+    if [ -n "${SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX:-}" ]; then
+        url="$(source_url_from_index "$SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX")" || {
+            msg_err "无效的换源入口编号: $SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX"
+            exit 1
+        }
+    else
+        url="$(select_source_url)" || exit 1
+    fi
+
     run_linuxmirrors "$url"
 }
 

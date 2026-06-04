@@ -5,49 +5,31 @@
 # 注意: 不要在此文件中使用 set -e / exit
 # ============================================================
 
-# --- 颜色 ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-PLAIN='\033[0m'
-BG_BLUE='\033[1;44m'
-BG_GREEN='\033[1;42m'
-BG_YELLOW='\033[1;43m'
-BG_RED='\033[1;41m'
+LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+source "$LIB_DIR/runtime.sh"
 
 # --- 消息函数 ---
 msg_badge() {
-    local bg="$1"
-    local label="$2"
-    local fg="$3"
-    local message="$4"
-    printf '%b %s %b %b%s%b\n' "$bg" "$label" "$PLAIN" "$fg" "$message" "$PLAIN"
+    ui_message "$1" "$2" "$3" "$4"
 }
 
 msg_prompt() {
-    local label="$1"
-    local message="$2"
-    printf '%b %s %b %s' "$BG_BLUE" "$label" "$PLAIN" "$message"
+    ui_prompt "$1" "$2"
 }
 
-draw_title_bar() {
-    local title="$1"
-    printf "%b== %s ========================================%b\n\n" "$BOLD" "$title" "$PLAIN"
+draw_current_title() {
+    scriptkit_draw_current_title "$1"
 }
 
-msg_info()  { msg_badge "$BG_BLUE" "提示" "$CYAN" "$1"; }
-msg_ok()    { msg_badge "$BG_GREEN" "完成" "$GREEN" "$1"; }
-msg_warn()  { msg_badge "$BG_YELLOW" "警告" "$YELLOW" "$1"; }
-msg_err()   { msg_badge "$BG_RED" "错误" "$RED" "$1"; }
-msg_cancelled() { msg_badge "$BG_BLUE" "提示" "$RED" "操作已取消"; }
-
-# --- 常用辅助函数 ---
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
+draw_step_title() {
+    draw_title_bar "$(scriptkit_step_title "$1")"
 }
+
+msg_info()  { ui_info "$1"; }
+msg_ok()    { ui_ok "$1"; }
+msg_warn()  { ui_warn "$1"; }
+msg_err()   { ui_error "$1"; }
+msg_cancelled() { ui_cancel "操作已取消"; }
 
 detect_os_id() {
     local os_id=""
@@ -164,19 +146,6 @@ ensure_commands() {
     done
 }
 
-download_file() {
-    local url="$1"
-    local output="$2"
-
-    if command_exists curl; then
-        curl -fsSL "$url" -o "$output"
-    elif command_exists wget; then
-        wget -qO "$output" "$url"
-    else
-        return 1
-    fi
-}
-
 # --- 权限检查 ---
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -191,310 +160,6 @@ require_root_action() {
         return 1
     fi
     return 0
-}
-
-# --- 方向键 是/否 选择器 ---
-# 用法: yesno_select "提示文字" [default]
-#   default: "y" 或 "n"（默认 n）
-#   返回: 0=是, 1=否
-yesno_select() {
-    local prompt="$1"
-    local default="${2:-n}"
-    local cursor=1  # 0=是, 1=否
-    local decorated_prompt=""
-    [ "$default" = "y" ] && cursor=0
-    decorated_prompt="$(msg_prompt "确认" "$prompt")"
-
-    # fallback: 无 tput 时用文本输入
-    if ! command -v tput &>/dev/null || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 &>/dev/null 2>&1; then
-        local ans=""
-        printf "%b [y/N]: " "$decorated_prompt"
-        read -r ans
-        ans=$(printf '%s' "${ans:-$default}" | tr '[:upper:]' '[:lower:]')
-        [ "$ans" = "y" ] && return 0 || return 1
-    fi
-
-    _draw_yesno() {
-        tput cuu 2 2>/dev/null || printf '\033[2A'
-        tput el 2>/dev/null || printf '\033[K'
-        if [ "$cursor" -eq 0 ]; then
-            printf "  %b%b> 是%b\n" "$GREEN" "$BOLD" "$PLAIN"
-            tput el 2>/dev/null || printf '\033[K'
-            printf "    否\n"
-        else
-            printf "    是\n"
-            tput el 2>/dev/null || printf '\033[K'
-            printf "  %b%b> 否%b\n" "$RED" "$BOLD" "$PLAIN"
-        fi
-    }
-
-    tput civis 2>/dev/null || true
-    printf "%b\n\n\n" "$decorated_prompt"
-    _draw_yesno
-
-    while true; do
-        local key
-        IFS= read -rsn1 key
-        if [[ "$key" == $'\x1b' ]]; then
-            IFS= read -rsn2 key
-        fi
-        case "$key" in
-            "[D" | "[A" | "h" | "k")  cursor=0 ;;
-            "[C" | "[B" | "l" | "j")  cursor=1 ;;
-            "")  break ;;
-        esac
-        _draw_yesno
-    done
-
-    tput cnorm 2>/dev/null || true
-    tput cuu 3 2>/dev/null || printf '\033[3A'
-    tput el 2>/dev/null || printf '\033[K'
-    if [ "$cursor" -eq 0 ]; then
-        printf "%b 是\n" "$decorated_prompt"
-    else
-        printf "%b 否\n" "$decorated_prompt"
-    fi
-    tput dl1 2>/dev/null || printf '\033[M'
-    tput dl1 2>/dev/null || printf '\033[M'
-    [ "$cursor" -eq 0 ] && return 0 || return 1
-}
-
-# --- 方向键多选菜单 ---
-# 用法: multiselect_menu "标题" labels_array selected_array
-#   labels_array:   选项文本数组（nameref）
-#   selected_array: 结果数组（nameref），0/1 表示未选/选中
-multiselect_menu() {
-    local title="$1"
-    shift
-    local -n _labels=$1
-    local -n _selected=$2
-    local cursor=0
-    local count=${#_labels[@]}
-    local i
-
-    # fallback: 无 tput 时用数字输入
-    if ! command -v tput &>/dev/null || ! tput cup 0 0 &>/dev/null 2>&1; then
-        printf "%b%s%b\n" "$BOLD" "$title" "$PLAIN"
-        printf "输入编号切换选中（空格分隔），直接回车确认:\n\n"
-        for ((i = 0; i < count; i++)); do
-            local mark="[ ]"
-            [ "${_selected[$i]}" = "1" ] && mark="[x]"
-            printf "  %d) %s %s\n" "$((i + 1))" "$mark" "${_labels[$i]}"
-        done
-        printf "\n选择（如 1 3 5）: "
-        local input=""
-        read -r input
-        for ((i = 0; i < count; i++)); do _selected[$i]=0; done
-        for num in $input; do
-            if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "$count" ]; then
-                _selected[$((num - 1))]=1
-            fi
-        done
-        return
-    fi
-
-    # tput 交互模式
-    trap 'tput cnorm 2>/dev/null; tput rmcup 2>/dev/null; exit 130' INT TERM
-
-    tput smcup 2>/dev/null || true
-    tput civis 2>/dev/null || true
-
-    _draw_multiselect() {
-        tput cup 0 0 2>/dev/null || true
-        tput ed 2>/dev/null || true
-        printf "%b== %s ==========================================%b\n\n" "$BOLD" "$title" "$PLAIN"
-        for ((i = 0; i < count; i++)); do
-            local mark="[ ]"
-            [ "${_selected[$i]}" = "1" ] && mark="${GREEN}[x]${PLAIN}"
-            if [ "$i" -eq "$cursor" ]; then
-                printf "   %b%b>%b %b %b%s%b\n" "$BLUE" "$BOLD" "$PLAIN" "$mark" "$BOLD" "${_labels[$i]}" "$PLAIN"
-            else
-                printf "     %b %s\n" "$mark" "${_labels[$i]}"
-            fi
-        done
-        printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN"
-        printf "%bSpace%b 切换选中  %bEnter%b 确认执行  %bq%b 退出\n" "$GREEN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
-    }
-
-    _draw_multiselect
-
-    while true; do
-        local key
-        IFS= read -rsn1 key
-        if [[ "$key" == $'\x1b' ]]; then
-            IFS= read -rsn2 key
-        fi
-        case "$key" in
-            "[A" | "k" | "K")
-                [ "$cursor" -gt 0 ] && cursor=$((cursor - 1)) ;;
-            "[B" | "j" | "J")
-                [ "$cursor" -lt $((count - 1)) ] && cursor=$((cursor + 1)) ;;
-            " ")
-                if [ "${_selected[$cursor]}" = "1" ]; then
-                    _selected[$cursor]=0
-                else
-                    _selected[$cursor]=1
-                fi ;;
-            "")  break ;;
-            "q" | "Q")
-                for ((i = 0; i < count; i++)); do _selected[$i]=0; done
-                break ;;
-        esac
-        _draw_multiselect
-    done
-
-    tput cnorm 2>/dev/null || true
-    tput rmcup 2>/dev/null || true
-    trap - INT TERM
-}
-
-# --- 方向键单选菜单 ---
-# 用法: select_menu "标题" labels_array selected_var [default_index]
-#   labels_array:   选项文本数组（nameref）
-#   selected_var:   结果索引变量（nameref，0-based）
-#   default_index:   默认选中索引（默认 0）
-select_menu() {
-    local title="$1"
-    local -n _labels=$2
-    local -n _selected=$3
-    local cursor="${4:-0}"
-    local count=${#_labels[@]}
-    local i
-
-    if [ "$count" -le 0 ]; then
-        msg_warn "没有可选项" >&2
-        return 1
-    fi
-
-    if ! [[ "$cursor" =~ ^[0-9]+$ ]] || [ "$cursor" -lt 0 ] || [ "$cursor" -ge "$count" ]; then
-        cursor=0
-    fi
-
-    cleanup_screen() {
-        tput cnorm 1>&2 2>/dev/null || true
-        tput rmcup 1>&2 2>/dev/null || true
-    }
-
-    read_key() {
-        local key next
-        IFS= read -rsn1 key
-        if [[ "$key" == $'\x1b' ]]; then
-            key=""
-            while IFS= read -rsn1 -t 0.05 next; do
-                key+="$next"
-                [ "$next" = "~" ] && break
-                [ "${#key}" -ge 5 ] && break
-            done
-            [ -z "$key" ] && key="ESC"
-        fi
-        printf '%s' "$key"
-    }
-
-    render_label_block() {
-        local first_prefix="$1"
-        local continuation_prefix="$2"
-        local highlight="$3"
-        local label="$4"
-        local line=""
-        local first_line="y"
-
-        while IFS= read -r line || [ -n "$line" ]; do
-            if [ "$first_line" = "y" ]; then
-                if [ "$highlight" = "y" ]; then
-                    printf '%b%b%s%b\n' "$first_prefix" "$BOLD" "$line" "$PLAIN" >&2
-                else
-                    printf '%b%s\n' "$first_prefix" "$line" >&2
-                fi
-                first_line="n"
-            else
-                printf '%b%s\n' "$continuation_prefix" "$line" >&2
-            fi
-        done <<< "$label"
-    }
-
-    show_selected_result() {
-        local label="$1"
-        local first_line="${label%%$'\n'*}"
-        local summary_title="${title#选择 }"
-
-        printf '%b %s\n' "$(msg_prompt "已选" "${summary_title}: ")" "$first_line" >&2
-    }
-
-    draw_menu() {
-        tput cup 0 0 1>&2 2>/dev/null || true
-        tput ed 1>&2 2>/dev/null || true
-        draw_title_bar "$title" >&2
-
-        for ((i = 0; i < count; i++)); do
-            if [ "$i" -eq "$cursor" ]; then
-                render_label_block "   ${BLUE}${BOLD}>${PLAIN} " "     " "y" "${_labels[$i]}"
-            else
-                render_label_block "     " "     " "n" "${_labels[$i]}"
-            fi
-        done
-
-        printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN" >&2
-        printf "%bUp/Down%b 移动  %bEnter%b 确认  %bq%b 退出\n" "$GREEN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN" >&2
-    }
-
-    # 无法使用 tput 时回退到普通输入
-    if ! command -v tput &>/dev/null || ! [ -t 0 ] || ! [ -t 2 ] || ! tput cup 0 0 &>/dev/null 2>&1; then
-        local choice=""
-        local plain_prefix=""
-        local plain_indent=""
-
-        draw_title_bar "$title" >&2
-        for ((i = 0; i < count; i++)); do
-            printf -v plain_prefix '  %d) ' "$((i + 1))"
-            printf -v plain_indent '%*s' "${#plain_prefix}" ''
-            render_label_block "$plain_prefix" "$plain_indent" "n" "${_labels[$i]}"
-        done
-        printf '\n%b' "$(msg_prompt "输入" "请选择 [1-${count}]（默认 $((cursor + 1))）: ")" >&2
-        read -r choice
-        if [[ "$choice" =~ ^[Qq]$ ]]; then
-            return 1
-        fi
-        choice="${choice:-$((cursor + 1))}"
-        if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$count" ]; then
-            msg_warn "输入无效" >&2
-            return 1
-        fi
-
-        _selected=$((choice - 1))
-        show_selected_result "${_labels[$_selected]}"
-        return 0
-    fi
-
-    tput smcup 1>&2 2>/dev/null || true
-    tput civis 1>&2 2>/dev/null || true
-    trap 'cleanup_screen; exit 130' INT TERM
-
-    draw_menu
-    while true; do
-        local key
-        key="$(read_key)"
-        case "$key" in
-            "[A")
-                [ "$cursor" -gt 0 ] && cursor=$((cursor - 1))
-                ;;
-            "[B")
-                [ "$cursor" -lt $((count - 1)) ] && cursor=$((cursor + 1))
-                ;;
-            "")
-                _selected="$cursor"
-                cleanup_screen
-                show_selected_result "${_labels[$_selected]}"
-                trap - INT TERM
-                return 0
-                ;;
-            "q" | "Q" | "ESC")
-                cleanup_screen
-                trap - INT TERM
-                return 1
-                ;;
-        esac
-        draw_menu
-    done
 }
 
 # --- SSH 配置公共函数 ---

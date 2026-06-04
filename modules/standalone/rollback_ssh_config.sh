@@ -95,7 +95,7 @@ main() {
     local selected_backup=""
 
     require_root_action || exit 1
-    printf "%b== 回滚 SSH 配置 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    draw_current_title "回滚 SSH 配置"
 
     if [ ! -f "$SSHD_CONFIG" ]; then
         msg_err "找不到 SSH 配置文件: $SSHD_CONFIG"

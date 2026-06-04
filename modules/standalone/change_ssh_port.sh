@@ -73,7 +73,7 @@ get_current_port() {
 main() {
     check_root
 
-    printf "%b========== 更改 SSH 端口 ==========%b\n\n" "$BOLD" "$PLAIN"
+    draw_current_title "更改 SSH 端口"
 
     local current_port
     current_port=$(get_current_port)

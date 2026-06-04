@@ -204,7 +204,7 @@ show_current_status() {
 main() {
     check_root
 
-    printf "%b========== 修改 SSH 登录方式 ==========%b\n\n" "$BOLD" "$PLAIN"
+    draw_current_title "修改 SSH 登录方式"
 
     show_current_status
 
@@ -220,7 +220,7 @@ main() {
     )
     local -a menu_selected=(0 0 0 0 0 0 0)
 
-    multiselect_menu "修改 SSH 登录方式（空格选中，回车确认）" menu_labels menu_selected
+    multiselect_menu "$(scriptkit_step_title "修改 SSH 登录方式（空格选中，回车确认）")" menu_labels menu_selected
 
     # 检查是否有选中项
     local has_selection="n"

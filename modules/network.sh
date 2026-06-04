@@ -120,9 +120,19 @@ network_port_lookup() {
     done
 }
 
+network_manage_ports_terminate_run() {
+    run_standalone_with_env "modules/standalone/manage_ports.sh" "SCRIPTKIT_MANAGE_PORTS_MODE=terminate"
+}
+
+network_manage_ports_block_run() {
+    run_standalone_with_env "modules/standalone/manage_ports.sh" "SCRIPTKIT_MANAGE_PORTS_MODE=block"
+}
+
 add_action "network_overview" "网络概览" "network" "network_overview"
 add_action "network_connectivity" "连通性检查" "network" "network_connectivity_check"
 add_action "network_dns_lookup" "DNS 查询" "network" "network_dns_lookup"
-add_action "network_listening_ports" "监听端口" "network" "network_listening_ports"
-add_action "network_port_lookup" "指定端口查询" "network" "network_port_lookup"
-add_script "network_manage_ports" "端口管理" "network" "modules/standalone/manage_ports.sh"
+add_menu "network_manage_ports" "端口管理" "network"
+add_action "network_listening_ports" "查看所有监听端口" "network_manage_ports" "network_listening_ports"
+add_action "network_port_lookup" "查看指定端口" "network_manage_ports" "network_port_lookup"
+add_action "network_manage_ports_terminate" "停止占用指定端口的进程" "network_manage_ports" "network_manage_ports_terminate_run"
+add_action "network_manage_ports_block" "使用防火墙封禁端口" "network_manage_ports" "network_manage_ports_block_run"

@@ -2,21 +2,9 @@
 
 set -u
 
-RED='\033[31m'
-GREEN='\033[32m'
-YELLOW='\033[33m'
-BLUE='\033[34m'
-CYAN='\033[36m'
-BOLD='\033[1m'
-ITALIC='\033[3m'
-PLAIN='\033[0m'
-BG_BLUE='\033[1;44m'
-BG_GREEN='\033[1;42m'
-BG_YELLOW='\033[1;43m'
-BG_RED='\033[1;41m'
-
 ROOT_MENU="main"
 CURRENT_MENU="$ROOT_MENU"
+CURRENT_ITEM_PATH=""
 SELECT_RESULT=""
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || SCRIPT_DIR="$PWD"
 MODULE_DIR="${MODULE_DIR:-$SCRIPT_DIR/modules}"
@@ -24,6 +12,44 @@ MODULE_CACHE_DIR="${MODULE_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME:-.}/.cache}/scrip
 SCRIPTKIT_RAW_BASE_URL="${SCRIPTKIT_RAW_BASE_URL:-https://raw.githubusercontent.com/LonelyRyF/ScriptKit/main}"
 MODULE_BASE_URL="${MODULE_BASE_URL:-$SCRIPTKIT_RAW_BASE_URL/modules}"
 MODULE_MANIFEST_URL="${MODULE_MANIFEST_URL:-$MODULE_BASE_URL/modules.list}"
+
+bootstrap_download_file() {
+    local url="$1"
+    local output="$2"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$url" -o "$output"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$output" "$url"
+    else
+        return 1
+    fi
+}
+
+load_runtime() {
+    local runtime_local="$MODULE_DIR/runtime.sh"
+    local runtime_cache="$MODULE_CACHE_DIR/runtime.sh"
+    local runtime_url="${MODULE_BASE_URL%/}/runtime.sh"
+
+    if [ -f "$runtime_local" ]; then
+        source "$runtime_local"
+        return 0
+    fi
+
+    if [ -f "$runtime_cache" ]; then
+        source "$runtime_cache"
+        return 0
+    fi
+
+    mkdir -p "$MODULE_CACHE_DIR" || return 1
+    bootstrap_download_file "$runtime_url" "$runtime_cache" || return 1
+    source "$runtime_cache"
+}
+
+if ! load_runtime; then
+    printf '无法加载 ScriptKit runtime。\n' >&2
+    exit 1
+fi
 
 declare -A MENU_TITLES=()
 declare -A MENU_CHILDREN=()
@@ -34,36 +60,6 @@ declare -A ITEM_TARGETS=()
 declare -A ITEM_PARENTS=()
 declare -a MENU_WARNINGS=()
 declare -a LOADED_MODULES=()
-
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-ui_label() {
-    local color="$1"
-    local label="$2"
-    printf '%b %s %b' "$color" "$label" "$PLAIN"
-}
-
-ui_message() {
-    local bg="$1"
-    local label="$2"
-    local fg="$3"
-    local message="$4"
-    printf '%b %s %b %b%s%b\n' "$bg" "$label" "$PLAIN" "$fg" "$message" "$PLAIN"
-}
-
-ui_info() { ui_message "$BG_BLUE" "提示" "$CYAN" "$1"; }
-ui_ok() { ui_message "$BG_GREEN" "完成" "$GREEN" "$1"; }
-ui_warn() { ui_message "$BG_YELLOW" "警告" "$YELLOW" "$1"; }
-ui_error() { ui_message "$BG_RED" "错误" "$RED" "$1"; }
-ui_cancel() { ui_message "$BG_BLUE" "提示" "$RED" "$1"; }
-
-ui_prompt() {
-    local label="$1"
-    local message="$2"
-    printf '%b %s %b %s' "$BG_BLUE" "$label" "$PLAIN" "$message"
-}
 
 record_menu_warning() {
     MENU_WARNINGS+=("$1")
@@ -199,11 +195,6 @@ format_item_tip() {
     esac
 }
 
-draw_title_bar() {
-    local title="$1"
-    printf "%b== %s ========================================%b\n\n" "$BOLD" "$title" "$PLAIN"
-}
-
 build_menu_path() {
     local menu_id="$1"
     local current="$menu_id"
@@ -225,6 +216,18 @@ build_menu_path() {
     done
 
     printf '%s' "$path"
+}
+
+build_item_path() {
+    local item_id="$1"
+    local parent="${ITEM_PARENTS[$item_id]:-}"
+    local item_title="${ITEM_TITLES[$item_id]:-$item_id}"
+
+    if [ -n "$parent" ]; then
+        printf '%s / %s' "$(build_menu_path "$parent")" "$item_title"
+    else
+        printf '%s' "$item_title"
+    fi
 }
 
 item_matches_filter() {
@@ -633,14 +636,26 @@ select_list() {
 }
 
 run_action() {
-    local handler="$1"
+    local item_id="$1"
+    local handler="$2"
+    local item_path="$(build_item_path "$item_id")"
+    local menu_id="${ITEM_PARENTS[$item_id]:-$CURRENT_MENU}"
+    local menu_path="$(build_menu_path "$menu_id")"
+    local previous_menu_path="${SCRIPTKIT_CURRENT_MENU_PATH:-}"
+    local previous_item_path="${SCRIPTKIT_CURRENT_ITEM_PATH:-}"
 
     clear 2>/dev/null || true
+    SCRIPTKIT_CURRENT_MENU_PATH="$menu_path"
+    SCRIPTKIT_CURRENT_ITEM_PATH="$item_path"
+    CURRENT_ITEM_PATH="$item_path"
     if declare -F "$handler" >/dev/null 2>&1; then
         "$handler"
     else
         ui_error "处理函数未找到: $handler"
     fi
+    SCRIPTKIT_CURRENT_MENU_PATH="$previous_menu_path"
+    SCRIPTKIT_CURRENT_ITEM_PATH="$previous_item_path"
+    CURRENT_ITEM_PATH="$previous_item_path"
     pause_screen
 }
 
@@ -674,30 +689,42 @@ resolve_script_file() {
     return 1
 }
 
-run_script() {
+run_standalone_with_env() {
     local script_path="$1"
+    shift
     local script_file=""
+    local -a env_vars=()
+
+    if ! script_file="$(resolve_script_file "$script_path")"; then
+        ui_error "脚本未找到: $script_path"
+        return 1
+    fi
+
+    env_vars+=("SCRIPTKIT_CURRENT_MENU_PATH=${SCRIPTKIT_CURRENT_MENU_PATH:-}")
+    env_vars+=("SCRIPTKIT_CURRENT_ITEM_PATH=${SCRIPTKIT_CURRENT_ITEM_PATH:-}")
+    while [ "$#" -gt 0 ]; do
+        env_vars+=("$1")
+        shift
+    done
+
+    env "${env_vars[@]}" bash "$script_file"
+}
+
+run_script() {
+    local item_id="$1"
+    local script_path="$2"
+    local script_file=""
+    local item_path="$(build_item_path "$item_id")"
+    local menu_id="${ITEM_PARENTS[$item_id]:-$CURRENT_MENU}"
+    local menu_path="$(build_menu_path "$menu_id")"
 
     clear 2>/dev/null || true
     if script_file="$(resolve_script_file "$script_path")"; then
-        bash "$script_file"
+        SCRIPTKIT_CURRENT_MENU_PATH="$menu_path" SCRIPTKIT_CURRENT_ITEM_PATH="$item_path" bash "$script_file"
     else
         ui_error "脚本未找到: $script_path"
     fi
     pause_screen
-}
-
-download_file() {
-    local url="$1"
-    local output="$2"
-
-    if command_exists curl; then
-        curl -fsSL "$url" -o "$output"
-    elif command_exists wget; then
-        wget -qO "$output" "$url"
-    else
-        return 1
-    fi
 }
 
 is_safe_module_path() {
@@ -735,12 +762,17 @@ download_remote_modules() {
 
 load_modules() {
     local module
+    local name=""
     local loaded="false"
 
     shopt -s nullglob
 
     if [ -d "$MODULE_DIR" ]; then
         for module in "$MODULE_DIR"/*.sh; do
+            name="$(basename -- "$module")"
+            case "$name" in
+                lib.sh | runtime.sh) continue ;;
+            esac
             # Source modules register menus/actions by calling add_menu/add_action/add_script.
             source "$module"
             LOADED_MODULES+=("$module")
@@ -751,6 +783,10 @@ load_modules() {
     if [ "$loaded" = "false" ] && [ -n "$MODULE_BASE_URL" ]; then
         if download_remote_modules; then
             for module in "$MODULE_CACHE_DIR"/*.sh; do
+                name="$(basename -- "$module")"
+                case "$name" in
+                    lib.sh | runtime.sh) continue ;;
+                esac
                 source "$module"
                 LOADED_MODULES+=("$module")
                 loaded="true"
@@ -957,10 +993,10 @@ show_menu() {
             CURRENT_MENU="$target"
             ;;
         action)
-            run_action "$target"
+            run_action "$selected" "$target"
             ;;
         script)
-            run_script "$target"
+            run_script "$selected" "$target"
             ;;
         back)
             CURRENT_MENU="${MENU_PARENTS[$menu_id]:-$ROOT_MENU}"
