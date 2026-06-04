@@ -48,15 +48,21 @@ yesno_select() {
     fi
 
     _draw_yesno() {
-        printf '\r\033[K%s ' "$prompt"
+        tput cuu 2 2>/dev/null || printf '\033[2A'
+        tput el 2>/dev/null || printf '\033[K'
         if [ "$cursor" -eq 0 ]; then
-            printf "%b%b> 是%b  否" "$GREEN" "$BOLD" "$PLAIN"
+            printf "  %b%b> 是%b\n" "$GREEN" "$BOLD" "$PLAIN"
+            tput el 2>/dev/null || printf '\033[K'
+            printf "    否\n"
         else
-            printf "  是  %b%b> 否%b" "$RED" "$BOLD" "$PLAIN"
+            printf "    是\n"
+            tput el 2>/dev/null || printf '\033[K'
+            printf "  %b%b> 否%b\n" "$RED" "$BOLD" "$PLAIN"
         fi
     }
 
     tput civis 2>/dev/null || true
+    printf "%s\n\n\n" "$prompt"
     _draw_yesno
 
     while true; do
@@ -74,7 +80,15 @@ yesno_select() {
     done
 
     tput cnorm 2>/dev/null || true
-    printf '\n'
+    tput cuu 3 2>/dev/null || printf '\033[3A'
+    tput el 2>/dev/null || printf '\033[K'
+    if [ "$cursor" -eq 0 ]; then
+        printf "%s 是\n" "$prompt"
+    else
+        printf "%s 否\n" "$prompt"
+    fi
+    tput dl1 2>/dev/null || printf '\033[M'
+    tput dl1 2>/dev/null || printf '\033[M'
     [ "$cursor" -eq 0 ] && return 0 || return 1
 }
 
@@ -192,10 +206,10 @@ validate_ssh_config() {
 backup_ssh_config() {
     local backup="${SSHD_CONFIG}.bak.$(date +%Y%m%d%H%M%S)"
     cp "$SSHD_CONFIG" "$backup" || {
-        msg_err "备份失败"
+        msg_err "备份失败" >&2
         return 1
     }
-    msg_ok "配置已备份到: $backup"
+    msg_ok "配置已备份到: $backup" >&2
     # 轮转
     find "$(dirname "$SSHD_CONFIG")" -maxdepth 1 -name 'sshd_config.bak.*' -type f 2>/dev/null \
         | sort -r | tail -n +6 | while IFS= read -r old; do

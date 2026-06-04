@@ -94,8 +94,7 @@ main() {
     printf '\n'
 
     # --- 参数配置 ---
-    printf "%b--- Fail2Ban SSH Jail 配置 ---%b\n" "$BOLD" "$PLAIN"
-    printf "以下参数可直接回车使用默认值\n\n"
+    printf "配置 Fail2Ban SSH jail，以下参数可直接回车使用默认值。\n\n"
 
     printf "封禁时长 bantime（默认 3600 秒，即 1 小时，-1 为永久）: "
     read -r input_bantime
@@ -130,20 +129,7 @@ main() {
         fi
     fi
 
-    # 确认
-    printf "\n%b--- 配置确认 ---%b\n" "$BOLD" "$PLAIN"
-    printf "  SSH 端口: %s\n" "$ssh_port"
-    printf "  bantime: %s\n" "$bantime"
-    printf "  findtime: %s\n" "$findtime"
-    printf "  maxretry: %s\n" "$maxretry"
-    if [ "$enable_mail" = "y" ]; then
-        printf "  邮件通知: %s (发件人: %s)\n" "$dest_email" "$sender_email"
-    fi
-    if [ "$enable_nginx" = "y" ]; then
-        printf "  nginx 防护: 是\n"
-    fi
-    printf '\n'
-    if ! yesno_select "确认写入配置并启动？"; then
+    if ! yesno_select "确认写入 SSH jail（端口 $ssh_port，maxretry $maxretry）并启动？"; then
         msg_warn "操作已取消"
         exit 0
     fi
@@ -204,15 +190,8 @@ main() {
         exit 1
     fi
 
-    # 显示状态
-    printf "\n%b--- 当前 Jail 状态 ---%b\n" "$BOLD" "$PLAIN"
-    fail2ban-client status 2>/dev/null || true
-
     printf "\n%b操作完成！%b\n" "$GREEN" "$PLAIN"
-    printf "常用命令:\n"
-    printf "  查看状态:   fail2ban-client status sshd\n"
-    printf "  解封 IP:    fail2ban-client set sshd unbanip <IP>\n"
-    printf "  查看日志:   tail -f /var/log/fail2ban.log\n"
+    printf "Fail2Ban 已启用 sshd jail，SSH 端口: %s\n" "$ssh_port"
 }
 
 main

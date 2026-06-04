@@ -117,18 +117,17 @@ main() {
     fi
 
     # 确认
-    printf "\n%b--- 操作确认 ---%b\n" "$BOLD" "$PLAIN"
-    printf "  新端口: %s\n" "$new_port"
+    local confirm_prompt="确认将 SSH 端口改为 $new_port"
     if [ "$keep_old" = "y" ]; then
-        printf "  保留旧端口: %s（双端口模式）\n" "$current_port"
+        confirm_prompt="$confirm_prompt，并保留旧端口 $current_port"
     else
-        printf "  移除旧端口: %s\n" "$current_port"
+        confirm_prompt="$confirm_prompt，并移除旧端口 $current_port"
     fi
     if [ "$update_fw" = "y" ]; then
-        printf "  更新防火墙: 是 (%s)\n" "$fw_type"
+        confirm_prompt="$confirm_prompt，同时更新 $fw_type 防火墙"
     fi
-    printf '\n'
-    if ! yesno_select "确认执行？"; then
+    confirm_prompt="$confirm_prompt？"
+    if ! yesno_select "$confirm_prompt"; then
         msg_warn "操作已取消"
         exit 0
     fi

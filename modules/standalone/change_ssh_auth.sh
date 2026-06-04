@@ -11,6 +11,9 @@ set -u
 SCRIPT_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_SELF_DIR}/../lib.sh"
 
+GENERATED_PUBLIC_KEY=""
+GENERATED_PUBLIC_KEY_USER=""
+
 # --- 操作函数 ---
 
 do_disable_password() {
@@ -86,11 +89,12 @@ do_generate_keypair() {
             ;;
     esac
 
-    if [ -f "$key_file" ]; then
+    if [ -f "$key_file" ] || [ -f "${key_file}.pub" ]; then
         if ! yesno_select "密钥文件 $key_file 已存在，是否覆盖？"; then
             msg_warn "跳过密钥生成"
             return 0
         fi
+        rm -f "$key_file" "${key_file}.pub"
     fi
 
     local comment=""
@@ -98,6 +102,7 @@ do_generate_keypair() {
     read -r comment
     comment="${comment:-${target_user}@$(hostname)}"
 
+    local passphrase=""
     printf "是否设置密钥密码？（直接回车为空密码）: "
     read -rs passphrase
     printf '\n'
@@ -105,9 +110,9 @@ do_generate_keypair() {
 
     msg_info "正在生成 $algo 密钥..."
     if [ "$algo" = "rsa" ]; then
-        ssh-keygen -t rsa -b 4096 -C "$comment" -f "$key_file" -N "$passphrase" -q
+        ssh-keygen -t rsa -b 4096 -C "$comment" -f "$key_file" -N "$passphrase" -q || return 1
     else
-        ssh-keygen -t ed25519 -C "$comment" -f "$key_file" -N "$passphrase" -q
+        ssh-keygen -t ed25519 -C "$comment" -f "$key_file" -N "$passphrase" -q || return 1
     fi
 
     chown -R "$target_user":"$(id -gn "$target_user" 2>/dev/null || printf '%s' "$target_user")" "$ssh_dir"
@@ -117,16 +122,22 @@ do_generate_keypair() {
     msg_ok "密钥已生成"
     printf "  私钥: %s\n" "$key_file"
     printf "  公钥: %s\n" "${key_file}.pub"
+
+    GENERATED_PUBLIC_KEY="$(< "${key_file}.pub")"
+    GENERATED_PUBLIC_KEY_USER="$target_user"
+
     printf "\n%b公钥内容:%b\n" "$BOLD" "$PLAIN"
-    cat "${key_file}.pub"
-    printf '\n'
+    printf '%s\n' "$GENERATED_PUBLIC_KEY"
+    msg_info "已记录此公钥，后续添加 authorized_keys 时无需再次粘贴"
 }
 
 do_add_pubkey() {
+    local default_user="${1:-root}"
+    local default_pubkey="${2:-}"
     local target_user=""
-    printf "为哪个用户添加公钥？（默认 root）: "
+    printf "为哪个用户添加公钥？（默认 %s）: " "$default_user"
     read -r target_user
-    target_user="${target_user:-root}"
+    target_user="${target_user:-$default_user}"
 
     local home_dir
     home_dir=$(eval printf '%s' "~${target_user}" 2>/dev/null)
@@ -143,8 +154,13 @@ do_add_pubkey() {
     mkdir -p "$ssh_dir"
     chmod 700 "$ssh_dir"
 
-    printf "\n请粘贴公钥内容（ssh-rsa/ssh-ed25519 开头的一行）:\n"
-    read -r pubkey
+    local pubkey="$default_pubkey"
+    if [ -n "$pubkey" ]; then
+        msg_info "使用刚生成的公钥，无需再次粘贴"
+    else
+        printf "\n请粘贴公钥内容（ssh-rsa/ssh-ed25519 开头的一行）:\n"
+        read -r pubkey
+    fi
 
     if [ -z "$pubkey" ]; then
         msg_err "公钥内容不能为空"
@@ -240,21 +256,38 @@ main() {
 
     # 备份
     local backup=""
+    printf '\n'
     if [ "$need_config_change" = "y" ]; then
-        printf '\n'
         backup=$(backup_ssh_config) || exit 1
     fi
 
-    printf '\n'
-
     # 执行操作
-    [ "${menu_selected[0]}" = "1" ] && { do_disable_password; need_restart="y"; printf '\n'; }
-    [ "${menu_selected[1]}" = "1" ] && { do_enable_password; need_restart="y"; printf '\n'; }
-    [ "${menu_selected[2]}" = "1" ] && { do_enable_pubkey; need_restart="y"; printf '\n'; }
-    [ "${menu_selected[3]}" = "1" ] && { do_disable_root_login; need_restart="y"; printf '\n'; }
-    [ "${menu_selected[4]}" = "1" ] && { do_allow_root_key_only; need_restart="y"; printf '\n'; }
-    [ "${menu_selected[5]}" = "1" ] && { do_generate_keypair; printf '\n'; }
-    [ "${menu_selected[6]}" = "1" ] && { do_add_pubkey; printf '\n'; }
+    if [ "${menu_selected[0]}" = "1" ]; then
+        do_disable_password || exit 1
+        need_restart="y"
+    fi
+    if [ "${menu_selected[1]}" = "1" ]; then
+        do_enable_password || exit 1
+        need_restart="y"
+    fi
+    if [ "${menu_selected[2]}" = "1" ]; then
+        do_enable_pubkey || exit 1
+        need_restart="y"
+    fi
+    if [ "${menu_selected[3]}" = "1" ]; then
+        do_disable_root_login || exit 1
+        need_restart="y"
+    fi
+    if [ "${menu_selected[4]}" = "1" ]; then
+        do_allow_root_key_only || exit 1
+        need_restart="y"
+    fi
+    if [ "${menu_selected[5]}" = "1" ]; then
+        do_generate_keypair || exit 1
+    fi
+    if [ "${menu_selected[6]}" = "1" ]; then
+        do_add_pubkey "$GENERATED_PUBLIC_KEY_USER" "$GENERATED_PUBLIC_KEY" || exit 1
+    fi
 
     # 校验 + 重启
     if [ "$need_restart" = "y" ]; then
