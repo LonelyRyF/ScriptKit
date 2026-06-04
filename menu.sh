@@ -347,7 +347,7 @@ interactive_select_list() {
         selected_id="${values[$selected]}"
         tip="$(format_item_tip "$selected_id")"
         printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN"
-        printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter ->%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b <-  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         if [ -n "$filter_text" ]; then
             printf "%bFilter%b %s  " "$YELLOW" "$PLAIN" "$filter_text"
         fi
@@ -389,7 +389,7 @@ interactive_select_list() {
         printf "%b------------------------------------------------%b" "$BOLD" "$PLAIN"
         tput cup "$((footer_line + 1))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
-        printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter ->%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b <-  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         tput cup "$((footer_line + 2))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
         if [ -n "$filter_text" ]; then
