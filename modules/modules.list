@@ -7,6 +7,7 @@ utility.sh
 security.sh
 test.sh
 reinstall.sh
+ecs.sh
 
 # Shared library (sourced by standalone scripts)
 runtime.sh
@@ -28,3 +29,4 @@ standalone/disk_test.sh
 standalone/terminal_setup.sh
 standalone/reinstall_system.sh
 standalone/installnet.sh
+standalone/ecs_toolbox.sh
