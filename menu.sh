@@ -347,7 +347,7 @@ interactive_select_list() {
         selected_id="${values[$selected]}"
         tip="$(format_item_tip "$selected_id")"
         printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN"
-        printf "%bEnter%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b h  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         if [ -n "$filter_text" ]; then
             printf "%bFilter%b %s  " "$YELLOW" "$PLAIN" "$filter_text"
         fi
@@ -389,7 +389,7 @@ interactive_select_list() {
         printf "%b------------------------------------------------%b" "$BOLD" "$PLAIN"
         tput cup "$((footer_line + 1))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
-        printf "%bEnter%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b h  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         tput cup "$((footer_line + 2))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
         if [ -n "$filter_text" ]; then
@@ -404,10 +404,10 @@ interactive_select_list() {
         tput ed 2>/dev/null || true
         draw_title_bar "$title / 帮助"
         printf 'Enter        进入菜单或执行当前项\n'
-        printf 'Up/Down j/k  上下移动\n'
+        printf 'Up/Down      上下移动\n'
         printf 'PgUp/PgDn    上下翻页\n'
         printf 'g/G          跳到顶部/底部\n'
-        printf 'h/Left/Bs    返回上级菜单\n'
+        printf 'Left/Bs      返回上级菜单\n'
         printf '/            搜索当前菜单，空输入清除搜索\n'
         printf 'Esc          清除当前搜索\n'
         printf 'q            退出 ScriptKit\n'
@@ -453,13 +453,13 @@ interactive_select_list() {
         local old_start="$start"
         key=$(read_key)
         case "$key" in
-            "[A" | "w" | "W" | "k" | "K")
+            "[A" | "w" | "W")
                 if [ "$selected" -gt 0 ]; then
                     selected=$((selected - 1))
                     [ "$selected" -lt "$start" ] && start=$((start - 1))
                 fi
                 ;;
-            "[B" | "s" | "S" | "j" | "J")
+            "[B" | "s" | "S")
                 if [ "$selected" -lt $((${#values[@]} - 1)) ]; then
                     selected=$((selected + 1))
                     [ "$selected" -ge $((start + page_size)) ] && start=$((start + 1))
@@ -483,7 +483,7 @@ interactive_select_list() {
                 selected=$((${#values[@]} - 1))
                 keep_selection_visible
                 ;;
-            "[D" | "h" | "H" | $'\x7f' | $'\b')
+            "[D" | $'\x7f' | $'\b')
                 if value_exists "__back"; then
                     SELECT_RESULT="__back"
                     break

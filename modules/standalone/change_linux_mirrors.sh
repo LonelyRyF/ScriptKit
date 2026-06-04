@@ -13,7 +13,6 @@ LINUXMIRRORS_LABELS=(
     "GitCode raw（可能延迟）"
     "jsDelivr CDN"
     "EdgeOne"
-    "自定义 HTTPS URL"
 )
 
 LINUXMIRRORS_URLS=(
@@ -23,7 +22,6 @@ LINUXMIRRORS_URLS=(
     "https://raw.gitcode.com/SuperManito/LinuxMirrors/raw/main/ChangeMirrors.sh"
     "https://cdn.jsdelivr.net/gh/SuperManito/LinuxMirrors@main/ChangeMirrors.sh"
     "https://edgeone.linuxmirrors.cn/main.sh"
-    ""
 )
 
 command_exists() {
@@ -44,51 +42,20 @@ download_file() {
     fi
 }
 
-valid_https_url() {
-    local url="$1"
-    case "$url" in
-        https://*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-show_sources() {
-    local i=0
-
-    printf "%b可用入口:%b\n" "$BOLD" "$PLAIN"
-    for ((i = 0; i < ${#LINUXMIRRORS_LABELS[@]}; i++)); do
-        if [ -n "${LINUXMIRRORS_URLS[$i]}" ]; then
-            printf "  %d) %-24s %s\n" "$((i + 1))" "${LINUXMIRRORS_LABELS[$i]}" "${LINUXMIRRORS_URLS[$i]}"
-        else
-            printf "  %d) %s\n" "$((i + 1))" "${LINUXMIRRORS_LABELS[$i]}"
-        fi
-    done
-}
-
 select_source_url() {
-    local choice=""
-    local url=""
+    local selected=2
+    local i
+    local -a menu_labels=()
 
-    show_sources >&2
-    printf '\n%b' "$(msg_prompt "输入" "请选择入口 [1-${#LINUXMIRRORS_LABELS[@]}]（默认 3）: ")" >&2
-    read -r choice
-    choice="${choice:-3}"
-    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#LINUXMIRRORS_LABELS[@]}" ]; then
-        msg_warn "入口编号无效" >&2
+    for ((i = 0; i < ${#LINUXMIRRORS_LABELS[@]}; i++)); do
+        menu_labels+=("${LINUXMIRRORS_LABELS[$i]}  ${LINUXMIRRORS_URLS[$i]}")
+    done
+
+    if ! select_menu "LinuxMirrors 换源" menu_labels selected 2; then
         return 1
     fi
 
-    url="${LINUXMIRRORS_URLS[$((choice - 1))]}"
-    if [ -z "$url" ]; then
-        printf '%b' "$(msg_prompt "输入" "请输入自定义 HTTPS URL: ")" >&2
-        read -r url
-    fi
-    if ! valid_https_url "$url"; then
-        msg_warn "只允许 HTTPS URL" >&2
-        return 1
-    fi
-
-    printf '%s' "$url"
+    printf '%s' "${LINUXMIRRORS_URLS[$selected]}"
 }
 
 run_linuxmirrors() {

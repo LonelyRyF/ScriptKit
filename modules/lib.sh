@@ -33,6 +33,11 @@ msg_prompt() {
     printf '%b %s %b %s' "$BG_BLUE" "$label" "$PLAIN" "$message"
 }
 
+draw_title_bar() {
+    local title="$1"
+    printf "%b== %s ========================================%b\n\n" "$BOLD" "$title" "$PLAIN"
+}
+
 msg_info()  { msg_badge "$BG_BLUE" "提示" "$CYAN" "$1"; }
 msg_ok()    { msg_badge "$BG_GREEN" "完成" "$GREEN" "$1"; }
 msg_warn()  { msg_badge "$BG_YELLOW" "警告" "$YELLOW" "$1"; }
@@ -208,6 +213,119 @@ multiselect_menu() {
     tput cnorm 2>/dev/null || true
     tput rmcup 2>/dev/null || true
     trap - INT TERM
+}
+
+# --- 方向键单选菜单 ---
+# 用法: select_menu "标题" labels_array selected_var [default_index]
+#   labels_array:   选项文本数组（nameref）
+#   selected_var:   结果索引变量（nameref，0-based）
+#   default_index:   默认选中索引（默认 0）
+select_menu() {
+    local title="$1"
+    local -n _labels=$2
+    local -n _selected=$3
+    local selected="${4:-0}"
+    local count=${#_labels[@]}
+    local i
+
+    if [ "$count" -le 0 ]; then
+        msg_warn "没有可选项" >&2
+        return 1
+    fi
+
+    if ! [[ "$selected" =~ ^[0-9]+$ ]] || [ "$selected" -lt 0 ] || [ "$selected" -ge "$count" ]; then
+        selected=0
+    fi
+
+    cleanup_screen() {
+        tput cnorm 1>&2 2>/dev/null || true
+        tput rmcup 1>&2 2>/dev/null || true
+    }
+
+    read_key() {
+        local key next
+        IFS= read -rsn1 key
+        if [[ "$key" == $'\x1b' ]]; then
+            key=""
+            while IFS= read -rsn1 -t 0.05 next; do
+                key+="$next"
+                [ "$next" = "~" ] && break
+                [ "${#key}" -ge 5 ] && break
+            done
+            [ -z "$key" ] && key="ESC"
+        fi
+        printf '%s' "$key"
+    }
+
+    draw_menu() {
+        tput cup 0 0 1>&2 2>/dev/null || true
+        tput ed 1>&2 2>/dev/null || true
+        draw_title_bar "$title" >&2
+
+        for ((i = 0; i < count; i++)); do
+            if [ "$i" -eq "$selected" ]; then
+                printf "   %b%b>%b %b%s%b\n" "$BLUE" "$BOLD" "$PLAIN" "$BOLD" "${_labels[$i]}" "$PLAIN" >&2
+            else
+                printf "     %s\n" "${_labels[$i]}" >&2
+            fi
+        done
+
+        printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN" >&2
+        printf "%bUp/Down%b 移动  %bEnter%b 确认  %bq%b 退出\n" "$GREEN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN" >&2
+    }
+
+    # 无法使用 tput 时回退到普通输入
+    if ! command -v tput &>/dev/null || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 &>/dev/null 2>&1; then
+        local choice=""
+
+        draw_title_bar "$title" >&2
+        for ((i = 0; i < count; i++)); do
+            printf '  %d) %s\n' "$((i + 1))" "${_labels[$i]}" >&2
+        done
+        printf '\n%b' "$(msg_prompt "输入" "请选择 [1-${count}]（默认 $((selected + 1))）: ")" >&2
+        read -r choice
+        if [[ "$choice" =~ ^[Qq]$ ]]; then
+            return 1
+        fi
+        choice="${choice:-$((selected + 1))}"
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$count" ]; then
+            msg_warn "输入无效" >&2
+            return 1
+        fi
+
+        _selected=$((choice - 1))
+        return 0
+    fi
+
+    tput smcup 1>&2 2>/dev/null || true
+    tput civis 1>&2 2>/dev/null || true
+    trap 'cleanup_screen; exit 130' INT TERM
+
+    draw_menu
+    while true; do
+        local key
+        key="$(read_key)"
+        case "$key" in
+            "[A")
+                [ "$selected" -gt 0 ] && selected=$((selected - 1))
+                ;;
+            "[B")
+                [ "$selected" -lt $((count - 1)) ] && selected=$((selected + 1))
+                ;;
+            "")
+                _selected="$selected"
+                cleanup_screen
+                trap - INT TERM
+                return 0
+                ;;
+            "q" | "Q" | "ESC")
+                cleanup_screen
+                trap - INT TERM
+                return 1
+                ;;
+        esac
+        draw_menu
+    done
 }
 
 # --- SSH 配置公共函数 ---
