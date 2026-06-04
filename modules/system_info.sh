@@ -15,14 +15,45 @@ system_info_os_name() {
     printf '%s' "$os_name"
 }
 
+system_info_print_time_status() {
+    local timezone=""
+    local ntp=""
+    local synchronized=""
+    local local_rtc=""
+
+    if command_exists date; then
+        printf "当前时间: %s\n" "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    fi
+
+    if command_exists timedatectl; then
+        timezone="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+        ntp="$(timedatectl show -p NTP --value 2>/dev/null || true)"
+        synchronized="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)"
+        local_rtc="$(timedatectl show -p LocalRTC --value 2>/dev/null || true)"
+
+        printf "时区: %s\n" "${timezone:-unknown}"
+        printf "NTP 启用: %s\n" "${ntp:-unknown}"
+        printf "时间已同步: %s\n" "${synchronized:-unknown}"
+        printf "硬件时钟使用本地时间: %s\n" "${local_rtc:-unknown}"
+    fi
+}
+
 system_info_overview() {
     local hostname_value="unknown"
     local kernel_value="unknown"
     local uptime_value="unknown"
     local load_value="unknown"
+    local user_name="unknown"
+    local user_id="unknown"
+    local group_id="unknown"
+    local home_dir="${HOME:-unknown}"
+    local shell_name="${SHELL:-unknown}"
 
     command_exists hostname && hostname_value="$(hostname 2>/dev/null || printf 'unknown')"
     command_exists uname && kernel_value="$(uname -srmo 2>/dev/null || uname -a 2>/dev/null || printf 'unknown')"
+    command_exists whoami && user_name="$(whoami 2>/dev/null || printf 'unknown')"
+    command_exists id && user_id="$(id -u 2>/dev/null || printf 'unknown')"
+    command_exists id && group_id="$(id -g 2>/dev/null || printf 'unknown')"
     if command_exists uptime; then
         uptime_value="$(uptime -p 2>/dev/null || uptime 2>/dev/null || printf 'unknown')"
     fi
@@ -30,16 +61,21 @@ system_info_overview() {
         read -r load_value _ < /proc/loadavg || load_value="unknown"
     fi
 
-    printf "%b== 系统概览 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "系统概览"
     printf "主机名: %s\n" "$hostname_value"
     printf "系统: %s\n" "$(system_info_os_name)"
     printf "内核: %s\n" "$kernel_value"
     printf "运行时间: %s\n" "$uptime_value"
     printf "负载: %s\n" "$load_value"
+    printf "\n当前用户: %s (UID=%s GID=%s)\n" "$user_name" "$user_id" "$group_id"
+    printf "HOME: %s\n" "$home_dir"
+    printf "SHELL: %s\n" "$shell_name"
+    printf "\n%b时间与时区:%b\n" "$BOLD" "$PLAIN"
+    system_info_print_time_status
 }
 
 system_info_memory() {
-    printf "%b== 内存使用 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "内存使用"
     if command_exists free; then
         free -h | awk '
             /^Mem:/ {
@@ -80,7 +116,7 @@ system_info_memory() {
 }
 
 system_info_disk() {
-    printf "%b== 磁盘使用 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "磁盘使用"
     if command_exists df; then
         df -hT -x tmpfs -x devtmpfs 2>/dev/null | awk '
             NR == 1 { next }
@@ -102,7 +138,7 @@ system_info_disk() {
 }
 
 system_info_process_top() {
-    printf "%b== 资源占用 TOP ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "资源占用 TOP"
     if command_exists ps; then
         ps -eo pid,user,%cpu,%mem,comm --sort=-%cpu 2>/dev/null | awk '
             NR == 1 { printf "%-8s %-12s %-8s %-8s %s\n", "PID", "用户", "CPU%", "MEM%", "命令"; next }
@@ -116,6 +152,7 @@ system_info_process_top() {
 system_info_dir_size() {
     local path=""
 
+    scriptkit_draw_current_title "目录体积统计"
     printf '%b' "$(ui_prompt "输入" "请输入要统计的目录（默认当前目录）: ")"
     read -r path
     path="${path:-.}"
@@ -129,7 +166,7 @@ system_info_dir_size() {
         return 1
     fi
 
-    printf "\n%b== 目录体积统计: %s ========================================%b\n\n" "$BOLD" "$path" "$PLAIN"
+    printf "\n目录: %s\n\n" "$path"
     du -h --max-depth=1 "$path" 2>/dev/null | sort -hr | awk '
         {
             size = $1
@@ -141,7 +178,7 @@ system_info_dir_size() {
 }
 
 system_info_tcp_connections() {
-    printf "%b== TCP 连接统计 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "TCP 连接统计"
     if ! command_exists ss || ! command_exists awk; then
         ui_error "需要 ss 和 awk。"
         return 1
@@ -157,15 +194,7 @@ system_info_tcp_connections() {
             printf "同步中 SYN-SENT/SYN-RECV: %d\n", states["SYN-SENT"] + states["SYN-RECV"] + 0
         }
     '
-}
-
-system_info_http_connections() {
-    printf "%b== HTTP(S) TCP 连接统计 ========================================%b\n\n" "$BOLD" "$PLAIN"
-    if ! command_exists ss || ! command_exists awk; then
-        ui_error "需要 ss 和 awk。"
-        return 1
-    fi
-
+    printf "\nHTTP(S) 已建立连接:\n"
     ss -antH 2>/dev/null | awk '
         $1 == "ESTAB" {
             local_addr = $4
@@ -180,30 +209,9 @@ system_info_http_connections() {
     '
 }
 
-system_info_current_user() {
-    local user_name="unknown"
-    local user_id="unknown"
-    local group_id="unknown"
-    local home_dir="${HOME:-unknown}"
-    local shell_name="${SHELL:-unknown}"
-
-    command_exists whoami && user_name="$(whoami 2>/dev/null || printf 'unknown')"
-    command_exists id && user_id="$(id -u 2>/dev/null || printf 'unknown')"
-    command_exists id && group_id="$(id -g 2>/dev/null || printf 'unknown')"
-
-    printf "%b== 当前用户 ========================================%b\n\n" "$BOLD" "$PLAIN"
-    printf "用户: %s\n" "$user_name"
-    printf "UID: %s\n" "$user_id"
-    printf "GID: %s\n" "$group_id"
-    printf "HOME: %s\n" "$home_dir"
-    printf "SHELL: %s\n" "$shell_name"
-}
-
 add_action "system_overview" "系统概览" "system" "system_info_overview"
 add_action "system_memory" "内存使用" "system" "system_info_memory"
 add_action "system_disk" "磁盘使用" "system" "system_info_disk"
 add_action "system_process_top" "资源占用 TOP" "system" "system_info_process_top"
 add_action "system_dir_size" "目录体积统计" "system" "system_info_dir_size"
 add_action "system_tcp_connections" "TCP 连接统计" "system" "system_info_tcp_connections"
-add_action "system_http_connections" "HTTP(S) 连接统计" "system" "system_info_http_connections"
-add_action "system_current_user" "当前用户" "system" "system_info_current_user"

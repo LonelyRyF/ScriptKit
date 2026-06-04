@@ -186,6 +186,19 @@ main() {
             ;;
     esac
 
+    draw_current_title "磁盘健康检测"
+
+    if is_likely_virtual_disk_env; then
+        msg_info "检测到当前环境为云主机 / 虚拟磁盘，跳过 HDSentinel，直接使用系统原生健康信息工具。"
+        if fallback_disk_report; then
+            msg_ok "已跳过 HDSentinel，改用 smartctl / nvme 检测"
+            return 0
+        fi
+
+        msg_warn "已跳过 HDSentinel，但未能读取 SMART / NVMe 健康信息。"
+        return 1
+    fi
+
     TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/scriptkit-disk-test.XXXXXX")" || {
         msg_err "无法创建临时目录"
         exit 1
@@ -209,7 +222,6 @@ main() {
         exit 1
     }
 
-    draw_current_title "磁盘健康检测"
     output="$("$binary" 2>&1)"
     rc=$?
     printf '%s\n' "$output"

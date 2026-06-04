@@ -854,7 +854,7 @@ show_scriptkit_status() {
         esac
     done
 
-    printf "%b== ScriptKit 状态 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "查看运行状态"
     printf "脚本目录: %s\n" "$SCRIPT_DIR"
     printf "本地模块目录: %s\n" "$MODULE_DIR"
     printf "模块缓存目录: %s\n" "$MODULE_CACHE_DIR"
@@ -893,7 +893,7 @@ show_scriptkit_status() {
 }
 
 refresh_remote_module_cache() {
-    printf "%b== 刷新远程模块缓存 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "刷新远程模块缓存"
 
     if [ -z "$MODULE_BASE_URL" ] || [ -z "$MODULE_MANIFEST_URL" ]; then
         ui_error "未配置远程模块地址。"
@@ -928,7 +928,7 @@ is_safe_cache_dir() {
 }
 
 clear_module_cache() {
-    printf "%b== 清理模块缓存 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "清理模块缓存"
     printf "缓存目录: %s\n\n" "$MODULE_CACHE_DIR"
 
     if ! is_safe_cache_dir "$MODULE_CACHE_DIR"; then

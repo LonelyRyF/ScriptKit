@@ -286,7 +286,7 @@ uninstall_user_services() {
 
 operate_services() {
     local selection=""
-    local action=""
+    local action="$1"
     local service=""
     local -a selected=()
 
@@ -303,28 +303,42 @@ operate_services() {
         return 1
     fi
 
-    printf "\n支持的操作:\n"
-    printf "  1) 查看状态摘要\n"
-    printf "  2) 停止服务\n"
-    printf "  3) 关闭开机自启\n"
-    printf "  4) 卸载用户安装服务\n"
-    printf '%b' "$(msg_prompt "输入" "选择 [1-4]: ")"
-    read -r action
-
     case "$action" in
-        1)
+        summary)
             for service in "${selected[@]}"; do
                 show_service_summary "$service"
             done
             ;;
-        2) stop_services "${selected[@]}" ;;
-        3) disable_services "${selected[@]}" ;;
-        4) uninstall_user_services "${selected[@]}" ;;
+        stop) stop_services "${selected[@]}" ;;
+        disable) disable_services "${selected[@]}" ;;
+        uninstall) uninstall_user_services "${selected[@]}" ;;
+        prompt)
+            printf "\n支持的操作:\n"
+            printf "  1) 查看状态摘要\n"
+            printf "  2) 停止服务\n"
+            printf "  3) 关闭开机自启\n"
+            printf "  4) 卸载用户安装服务\n"
+            printf '%b' "$(msg_prompt "输入" "选择 [1-4]: ")"
+            read -r action
+
+            case "$action" in
+                1)
+                    for service in "${selected[@]}"; do
+                        show_service_summary "$service"
+                    done
+                    ;;
+                2) stop_services "${selected[@]}" ;;
+                3) disable_services "${selected[@]}" ;;
+                4) uninstall_user_services "${selected[@]}" ;;
+                *) msg_warn "无效选择" ;;
+            esac
+            ;;
         *) msg_warn "无效选择" ;;
     esac
 }
 
-main() {
+run_service_operation() {
+    local action="$1"
     local filter=""
 
     require_systemctl || exit 1
@@ -345,12 +359,32 @@ main() {
             clear 2>/dev/null || true
             continue
         }
-        operate_services
+        operate_services "$action"
 
         printf '\n%b' "$(msg_prompt "提示" "按 Enter 继续...")"
         read -r _
         clear 2>/dev/null || true
     done
+}
+
+main() {
+    case "${SCRIPTKIT_MANAGE_SERVICES_MODE:-}" in
+        summary)
+            run_service_operation "summary"
+            ;;
+        stop)
+            run_service_operation "stop"
+            ;;
+        disable)
+            run_service_operation "disable"
+            ;;
+        uninstall)
+            run_service_operation "uninstall"
+            ;;
+        *)
+            run_service_operation "prompt"
+            ;;
+    esac
 }
 
 main

@@ -21,6 +21,7 @@ manage_service_status() {
     local main_pid=""
 
     manage_require_systemctl || return 1
+    scriptkit_draw_current_title "查看服务状态"
     printf '%b' "$(ui_prompt "输入" "请输入服务名（例如 ssh、nginx、docker）: ")"
     read -r service
     if [ -z "$service" ]; then
@@ -28,7 +29,7 @@ manage_service_status() {
         return 1
     fi
 
-    printf "\n%b== 服务状态: %s ========================================%b\n\n" "$BOLD" "$service" "$PLAIN"
+    printf "\n服务: %s\n\n" "$service"
     description="$(systemctl show "$service" -p Description --value 2>/dev/null || true)"
     load_state="$(systemctl show "$service" -p LoadState --value 2>/dev/null || true)"
     active_state="$(systemctl show "$service" -p ActiveState --value 2>/dev/null || true)"
@@ -54,7 +55,7 @@ manage_failed_services() {
     local failed_output=""
 
     manage_require_systemctl || return 1
-    printf "%b== 失败服务 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "查看失败服务"
 
     failed_output="$(systemctl --failed --no-legend --plain 2>/dev/null)" || {
         ui_error "读取失败服务列表失败。"
@@ -89,6 +90,7 @@ manage_service_logs() {
         return 1
     fi
 
+    scriptkit_draw_current_title "查看服务日志"
     printf '%b' "$(ui_prompt "输入" "请输入服务名（例如 ssh、nginx、docker）: ")"
     read -r service
     if [ -z "$service" ]; then
@@ -104,7 +106,7 @@ manage_service_logs() {
         lines="80"
     fi
 
-    printf "\n%b== 服务日志: %s 最近 %s 行 ========================================%b\n\n" "$BOLD" "$service" "$lines" "$PLAIN"
+    printf "\n服务: %s\n最近行数: %s\n\n" "$service" "$lines"
     journalctl -u "$service" -n "$lines" --no-pager -o short-iso
 }
 
@@ -132,11 +134,31 @@ manage_linux_mirrors_edgeone_run() {
     run_standalone_with_env "modules/standalone/change_linux_mirrors.sh" "SCRIPTKIT_LINUXMIRRORS_SOURCE_INDEX=5"
 }
 
+manage_services_summary_run() {
+    run_standalone_with_env "modules/standalone/manage_services.sh" "SCRIPTKIT_MANAGE_SERVICES_MODE=summary"
+}
+
+manage_services_stop_run() {
+    run_standalone_with_env "modules/standalone/manage_services.sh" "SCRIPTKIT_MANAGE_SERVICES_MODE=stop"
+}
+
+manage_services_disable_run() {
+    run_standalone_with_env "modules/standalone/manage_services.sh" "SCRIPTKIT_MANAGE_SERVICES_MODE=disable"
+}
+
+manage_services_uninstall_run() {
+    run_standalone_with_env "modules/standalone/manage_services.sh" "SCRIPTKIT_MANAGE_SERVICES_MODE=uninstall"
+}
+
 add_action "manage_service_status" "查看服务状态" "manage" "manage_service_status"
-add_action "manage_failed_services" "查看失败服务" "manage" "manage_failed_services"
 add_action "manage_service_logs" "查看服务日志" "manage" "manage_service_logs"
 add_script "manage_hostname" "主机名管理" "manage" "modules/standalone/manage_hostname.sh"
-add_script "manage_services" "Systemd 服务管理" "manage" "modules/standalone/manage_services.sh"
+add_menu "manage_services" "Systemd 服务管理" "manage"
+add_action "manage_services_summary" "查看状态摘要" "manage_services" "manage_services_summary_run"
+add_action "manage_services_failed" "查看失败服务" "manage_services" "manage_failed_services"
+add_action "manage_services_stop" "停止服务" "manage_services" "manage_services_stop_run"
+add_action "manage_services_disable" "关闭开机自启" "manage_services" "manage_services_disable_run"
+add_action "manage_services_uninstall" "卸载用户安装服务" "manage_services" "manage_services_uninstall_run"
 add_menu "manage_linux_mirrors" "LinuxMirrors 换源" "manage"
 add_action "manage_linux_mirrors_official" "Official" "manage_linux_mirrors" "manage_linux_mirrors_official_run"
 add_action "manage_linux_mirrors_github" "GitHub raw" "manage_linux_mirrors" "manage_linux_mirrors_github_run"

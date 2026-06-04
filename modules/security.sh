@@ -68,7 +68,7 @@ security_ssh_status() {
     local active_service="unknown"
     local enabled_service="unknown"
 
-    printf "%b== SSH 状态 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "查看 SSH 状态"
     printf "配置文件: %s\n" "$config"
     if [ ! -r "$config" ]; then
         ui_error "无法读取 SSH 配置文件。"
@@ -106,9 +106,49 @@ security_ssh_status() {
     security_firewall_status | awk 'NF { print "  " $0; found = 1 } END { if (!found) print "  未检测到常见防火墙命令" }'
 }
 
+security_ssh_auth_batch_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=batch"
+}
+
+security_ssh_auth_disable_password_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=disable_password"
+}
+
+security_ssh_auth_enable_password_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=enable_password"
+}
+
+security_ssh_auth_enable_pubkey_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=enable_pubkey"
+}
+
+security_ssh_auth_disable_root_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=disable_root_login"
+}
+
+security_ssh_auth_root_key_only_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=allow_root_key_only"
+}
+
+security_ssh_auth_generate_keypair_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=generate_keypair"
+}
+
+security_ssh_auth_add_pubkey_run() {
+    run_standalone_with_env "modules/standalone/change_ssh_auth.sh" "SCRIPTKIT_SSH_AUTH_MODE=add_pubkey"
+}
+
 add_menu "ssh_hardening" "SSH 安全加固" "security"
 add_action "ssh_status" "查看 SSH 状态" "ssh_hardening" "security_ssh_status"
 add_script "change_ssh_port" "更改 SSH 端口" "ssh_hardening" "modules/standalone/change_ssh_port.sh"
-add_script "change_ssh_auth" "修改 SSH 登录方式" "ssh_hardening" "modules/standalone/change_ssh_auth.sh"
+add_menu "change_ssh_auth" "修改 SSH 登录方式" "ssh_hardening"
+add_action "change_ssh_auth_disable_password" "禁用密码登录" "change_ssh_auth" "security_ssh_auth_disable_password_run"
+add_action "change_ssh_auth_enable_password" "启用密码登录" "change_ssh_auth" "security_ssh_auth_enable_password_run"
+add_action "change_ssh_auth_enable_pubkey" "启用密钥认证" "change_ssh_auth" "security_ssh_auth_enable_pubkey_run"
+add_action "change_ssh_auth_disable_root" "禁用 root SSH 登录" "change_ssh_auth" "security_ssh_auth_disable_root_run"
+add_action "change_ssh_auth_root_key_only" "root 仅允许密钥登录" "change_ssh_auth" "security_ssh_auth_root_key_only_run"
+add_action "change_ssh_auth_generate_keypair" "生成 SSH 密钥对" "change_ssh_auth" "security_ssh_auth_generate_keypair_run"
+add_action "change_ssh_auth_add_pubkey" "添加公钥到 authorized_keys" "change_ssh_auth" "security_ssh_auth_add_pubkey_run"
+add_action "change_ssh_auth_batch" "批量选择模式" "change_ssh_auth" "security_ssh_auth_batch_run"
 add_script "rollback_ssh_config" "回滚 SSH 配置" "ssh_hardening" "modules/standalone/rollback_ssh_config.sh"
 add_script "install_fail2ban" "安装 Fail2Ban" "security" "modules/standalone/install_fail2ban.sh"

@@ -2,8 +2,24 @@
 
 # Read-only network diagnostics.
 
+network_public_ip_value() {
+    local ip=""
+
+    if command_exists curl; then
+        ip="$(curl -fsSL --max-time 8 https://api.ipify.org 2>/dev/null || true)"
+        [ -z "$ip" ] && ip="$(curl -fsSL --max-time 8 https://ifconfig.me 2>/dev/null || true)"
+    elif command_exists wget; then
+        ip="$(wget -qO- --timeout=8 https://api.ipify.org 2>/dev/null || true)"
+        [ -z "$ip" ] && ip="$(wget -qO- --timeout=8 https://ifconfig.me 2>/dev/null || true)"
+    fi
+
+    printf '%s' "$ip"
+}
+
 network_overview() {
-    printf "%b== 网络概览 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    local public_ip=""
+
+    scriptkit_draw_current_title "网络概览"
 
     if command_exists ip; then
         printf "%b接口地址:%b\n" "$BOLD" "$PLAIN"
@@ -20,13 +36,21 @@ network_overview() {
         printf "\n%bDNS:%b\n" "$BOLD" "$PLAIN"
         awk '/^nameserver/ { print "  " $2 }' /etc/resolv.conf
     fi
+
+    public_ip="$(network_public_ip_value)"
+    printf "\n%b公网 IP:%b\n" "$BOLD" "$PLAIN"
+    if [ -n "$public_ip" ]; then
+        printf "  %s\n" "$public_ip"
+    else
+        printf "  获取失败\n"
+    fi
 }
 
 network_connectivity_check() {
     local target
     local -a targets=("1.1.1.1" "8.8.8.8" "github.com" "raw.githubusercontent.com")
 
-    printf "%b== 连通性检查 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "连通性检查"
     if ! command_exists ping; then
         ui_error "未找到 ping。"
         return 1
@@ -42,28 +66,8 @@ network_connectivity_check() {
     done
 }
 
-network_dns_lookup() {
-    local domain=""
-
-    printf '%b' "$(ui_prompt "输入" "请输入要查询的域名（默认 github.com）: ")"
-    read -r domain
-    domain="${domain:-github.com}"
-
-    printf "\n%b== DNS 查询: %s ========================================%b\n\n" "$BOLD" "$domain" "$PLAIN"
-    if command_exists dig; then
-        dig +short "$domain" | awk '{ print "  " $0 }'
-    elif command_exists nslookup; then
-        nslookup "$domain" 2>/dev/null | awk '/^Address: / { print "  " $2 }'
-    elif command_exists getent; then
-        getent hosts "$domain" | awk '{ print "  " $1 }'
-    else
-        ui_error "未找到 dig、nslookup 或 getent。"
-        return 1
-    fi
-}
-
 network_listening_ports() {
-    printf "%b== 监听端口 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    scriptkit_draw_current_title "查看所有监听端口"
     if command_exists ss; then
         ss -tulnH 2>/dev/null | awk '{ printf "协议: %-5s 状态: %-10s 本地地址: %s\n", $1, $2, $5 }'
     elif command_exists netstat; then
@@ -78,6 +82,7 @@ network_port_lookup() {
     local input=""
     local port=""
 
+    scriptkit_draw_current_title "查看指定端口"
     printf '%b' "$(ui_prompt "输入" "请输入要查询的端口号，多个用逗号分隔: ")"
     read -r input
     if [ -z "$input" ]; then
@@ -85,7 +90,6 @@ network_port_lookup() {
         return 1
     fi
 
-    printf "\n%b== 指定端口查询 ========================================%b\n\n" "$BOLD" "$PLAIN"
     input="${input//,/ }"
     for port in $input; do
         if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
@@ -130,7 +134,6 @@ network_manage_ports_block_run() {
 
 add_action "network_overview" "网络概览" "network" "network_overview"
 add_action "network_connectivity" "连通性检查" "network" "network_connectivity_check"
-add_action "network_dns_lookup" "DNS 查询" "network" "network_dns_lookup"
 add_menu "network_manage_ports" "端口管理" "network"
 add_action "network_listening_ports" "查看所有监听端口" "network_manage_ports" "network_listening_ports"
 add_action "network_port_lookup" "查看指定端口" "network_manage_ports" "network_port_lookup"

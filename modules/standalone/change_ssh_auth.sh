@@ -14,6 +14,16 @@ source "${SCRIPT_SELF_DIR}/../lib.sh"
 GENERATED_PUBLIC_KEY=""
 GENERATED_PUBLIC_KEY_USER=""
 
+AUTH_MODE_KEYS=(
+    "disable_password"
+    "enable_password"
+    "enable_pubkey"
+    "disable_root_login"
+    "allow_root_key_only"
+    "generate_keypair"
+    "add_pubkey"
+)
+
 # --- 操作函数 ---
 
 do_disable_password() {
@@ -200,15 +210,85 @@ show_current_status() {
     printf '\n'
 }
 
-# --- 主流程 ---
-main() {
-    check_root
+auth_mode_needs_config_change() {
+    case "$1" in
+        disable_password|enable_password|enable_pubkey|disable_root_login|allow_root_key_only) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
-    draw_current_title "修改 SSH 登录方式"
+run_auth_mode() {
+    case "$1" in
+        disable_password) do_disable_password ;;
+        enable_password) do_enable_password ;;
+        enable_pubkey) do_enable_pubkey ;;
+        disable_root_login) do_disable_root_login ;;
+        allow_root_key_only) do_allow_root_key_only ;;
+        generate_keypair) do_generate_keypair ;;
+        add_pubkey) do_add_pubkey "$GENERATED_PUBLIC_KEY_USER" "$GENERATED_PUBLIC_KEY" ;;
+        *)
+            msg_err "未知 SSH 登录方式操作: $1"
+            return 1
+            ;;
+    esac
+}
 
-    show_current_status
+apply_auth_modes() {
+    local mode=""
+    local backup=""
+    local need_config_change="n"
+    local need_restart="n"
 
-    # 定义选项
+    for mode in "$@"; do
+        if auth_mode_needs_config_change "$mode"; then
+            need_config_change="y"
+            break
+        fi
+    done
+
+    printf '\n'
+    if [ "$need_config_change" = "y" ]; then
+        backup=$(backup_ssh_config) || return 1
+    fi
+
+    for mode in "$@"; do
+        run_auth_mode "$mode" || return 1
+        if auth_mode_needs_config_change "$mode"; then
+            need_restart="y"
+        fi
+    done
+
+    if [ "$need_restart" = "y" ]; then
+        if ! validate_ssh_config; then
+            rollback_ssh_config "$backup"
+            msg_err "配置无效，已回滚。操作中止"
+            return 1
+        fi
+
+        if yesno_select "是否立即重启 SSH 服务使配置生效？" "y"; then
+            msg_info "正在重启 SSH 服务..."
+            if restart_sshd; then
+                msg_ok "SSH 服务已重启"
+            else
+                rollback_ssh_config "$backup"
+                msg_err "SSH 重启失败，已回滚配置"
+                restart_sshd 2>/dev/null
+                return 1
+            fi
+        else
+            msg_warn "配置已修改但未重启，请手动重启 SSH 服务"
+        fi
+    fi
+
+    printf "\n%bSSH 登录方式修改完成！%b\n" "$GREEN" "$PLAIN"
+    printf "%b请在新终端测试连接，确认可用后再关闭当前会话。%b\n" "$YELLOW" "$PLAIN"
+}
+
+run_batch_mode() {
+    local i=0
+    local has_selection="n"
+    local -a selected_modes=()
+
     local -a menu_labels=(
         "禁用密码登录"
         "启用密码登录"
@@ -222,90 +302,37 @@ main() {
 
     multiselect_menu "$(scriptkit_step_title "修改 SSH 登录方式（空格选中，回车确认）")" menu_labels menu_selected
 
-    # 检查是否有选中项
-    local has_selection="n"
-    local i
     for ((i = 0; i < ${#menu_selected[@]}; i++)); do
         if [ "${menu_selected[$i]}" = "1" ]; then
             has_selection="y"
-            break
+            selected_modes+=("${AUTH_MODE_KEYS[$i]}")
         fi
     done
+
     if [ "$has_selection" = "n" ]; then
         msg_info "未选择任何操作，退出"
-        exit 0
+        return 0
     fi
 
-    # 判断是否涉及 sshd_config 修改（选项 0-4）
-    local need_config_change="n"
-    local need_restart="n"
-    for ((i = 0; i < 5; i++)); do
-        if [ "${menu_selected[$i]}" = "1" ]; then
-            need_config_change="y"
-            break
-        fi
-    done
+    apply_auth_modes "${selected_modes[@]}"
+}
 
-    # 备份
-    local backup=""
-    printf '\n'
-    if [ "$need_config_change" = "y" ]; then
-        backup=$(backup_ssh_config) || exit 1
-    fi
+# --- 主流程 ---
+main() {
+    check_root
 
-    # 执行操作
-    if [ "${menu_selected[0]}" = "1" ]; then
-        do_disable_password || exit 1
-        need_restart="y"
-    fi
-    if [ "${menu_selected[1]}" = "1" ]; then
-        do_enable_password || exit 1
-        need_restart="y"
-    fi
-    if [ "${menu_selected[2]}" = "1" ]; then
-        do_enable_pubkey || exit 1
-        need_restart="y"
-    fi
-    if [ "${menu_selected[3]}" = "1" ]; then
-        do_disable_root_login || exit 1
-        need_restart="y"
-    fi
-    if [ "${menu_selected[4]}" = "1" ]; then
-        do_allow_root_key_only || exit 1
-        need_restart="y"
-    fi
-    if [ "${menu_selected[5]}" = "1" ]; then
-        do_generate_keypair || exit 1
-    fi
-    if [ "${menu_selected[6]}" = "1" ]; then
-        do_add_pubkey "$GENERATED_PUBLIC_KEY_USER" "$GENERATED_PUBLIC_KEY" || exit 1
-    fi
+    draw_current_title "修改 SSH 登录方式"
 
-    # 校验 + 重启
-    if [ "$need_restart" = "y" ]; then
-        if ! validate_ssh_config; then
-            rollback_ssh_config "$backup"
-            msg_err "配置无效，已回滚。操作中止"
-            exit 1
-        fi
+    show_current_status
 
-        if yesno_select "是否立即重启 SSH 服务使配置生效？" "y"; then
-            msg_info "正在重启 SSH 服务..."
-            if restart_sshd; then
-                msg_ok "SSH 服务已重启"
-            else
-                rollback_ssh_config "$backup"
-                msg_err "SSH 重启失败，已回滚配置"
-                restart_sshd 2>/dev/null
-                exit 1
-            fi
-        else
-            msg_warn "配置已修改但未重启，请手动重启 SSH 服务"
-        fi
-    fi
-
-    printf "\n%bSSH 登录方式修改完成！%b\n" "$GREEN" "$PLAIN"
-    printf "%b请在新终端测试连接，确认可用后再关闭当前会话。%b\n" "$YELLOW" "$PLAIN"
+    case "${SCRIPTKIT_SSH_AUTH_MODE:-}" in
+        ""|batch)
+            run_batch_mode || exit 1
+            ;;
+        *)
+            apply_auth_modes "$SCRIPTKIT_SSH_AUTH_MODE" || exit 1
+            ;;
+    esac
 }
 
 main
