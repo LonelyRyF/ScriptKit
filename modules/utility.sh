@@ -81,3 +81,4 @@ utility_time_status() {
 add_action "utility_public_ip" "查看公网 IP" "utility" "utility_public_ip"
 add_action "utility_random_password" "生成随机密码" "utility" "utility_random_password"
 add_action "utility_time_status" "时间与时区" "utility" "utility_time_status"
+add_script "utility_crontab" "Crontab 管理" "utility" "modules/standalone/manage_crontab.sh"

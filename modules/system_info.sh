@@ -113,7 +113,97 @@ system_info_process_top() {
     fi
 }
 
+system_info_dir_size() {
+    local path=""
+
+    printf "请输入要统计的目录（默认当前目录）: "
+    read -r path
+    path="${path:-.}"
+
+    if [ ! -d "$path" ]; then
+        printf "%b[ERROR]%b 目录不存在: %s\n" "$RED" "$PLAIN" "$path"
+        return 1
+    fi
+    if ! command_exists du || ! command_exists sort || ! command_exists awk; then
+        printf "%b[ERROR]%b 需要 du、sort、awk。\n" "$RED" "$PLAIN"
+        return 1
+    fi
+
+    printf "\n%b== 目录体积统计: %s ========================================%b\n\n" "$BOLD" "$path" "$PLAIN"
+    du -h --max-depth=1 "$path" 2>/dev/null | sort -hr | awk '
+        {
+            size = $1
+            $1 = ""
+            sub(/^ /, "")
+            printf "%-8s %s\n", size, $0
+        }
+    '
+}
+
+system_info_tcp_connections() {
+    printf "%b== TCP 连接统计 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    if ! command_exists ss || ! command_exists awk; then
+        printf "%b[ERROR]%b 需要 ss 和 awk。\n" "$RED" "$PLAIN"
+        return 1
+    fi
+
+    ss -antH 2>/dev/null | awk '
+        { states[$1]++; total++ }
+        END {
+            printf "总连接数: %d\n", total + 0
+            printf "已建立 ESTAB: %d\n", states["ESTAB"] + 0
+            printf "监听 LISTEN: %d\n", states["LISTEN"] + 0
+            printf "等待关闭 TIME-WAIT: %d\n", states["TIME-WAIT"] + 0
+            printf "同步中 SYN-SENT/SYN-RECV: %d\n", states["SYN-SENT"] + states["SYN-RECV"] + 0
+        }
+    '
+}
+
+system_info_http_connections() {
+    printf "%b== HTTP(S) TCP 连接统计 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    if ! command_exists ss || ! command_exists awk; then
+        printf "%b[ERROR]%b 需要 ss 和 awk。\n" "$RED" "$PLAIN"
+        return 1
+    fi
+
+    ss -antH 2>/dev/null | awk '
+        $1 == "ESTAB" {
+            local_addr = $4
+            if (local_addr ~ /:80$/) http++
+            if (local_addr ~ /:443$/) https++
+        }
+        END {
+            printf "80 端口已建立连接: %d\n", http + 0
+            printf "443 端口已建立连接: %d\n", https + 0
+            printf "HTTP(S) 合计: %d\n", http + https + 0
+        }
+    '
+}
+
+system_info_current_user() {
+    local user_name="unknown"
+    local user_id="unknown"
+    local group_id="unknown"
+    local home_dir="${HOME:-unknown}"
+    local shell_name="${SHELL:-unknown}"
+
+    command_exists whoami && user_name="$(whoami 2>/dev/null || printf 'unknown')"
+    command_exists id && user_id="$(id -u 2>/dev/null || printf 'unknown')"
+    command_exists id && group_id="$(id -g 2>/dev/null || printf 'unknown')"
+
+    printf "%b== 当前用户 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    printf "用户: %s\n" "$user_name"
+    printf "UID: %s\n" "$user_id"
+    printf "GID: %s\n" "$group_id"
+    printf "HOME: %s\n" "$home_dir"
+    printf "SHELL: %s\n" "$shell_name"
+}
+
 add_action "system_overview" "系统概览" "system" "system_info_overview"
 add_action "system_memory" "内存使用" "system" "system_info_memory"
 add_action "system_disk" "磁盘使用" "system" "system_info_disk"
 add_action "system_process_top" "资源占用 TOP" "system" "system_info_process_top"
+add_action "system_dir_size" "目录体积统计" "system" "system_info_dir_size"
+add_action "system_tcp_connections" "TCP 连接统计" "system" "system_info_tcp_connections"
+add_action "system_http_connections" "HTTP(S) 连接统计" "system" "system_info_http_connections"
+add_action "system_current_user" "当前用户" "system" "system_info_current_user"

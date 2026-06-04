@@ -111,3 +111,5 @@ manage_service_logs() {
 add_action "manage_service_status" "查看服务状态" "manage" "manage_service_status"
 add_action "manage_failed_services" "查看失败服务" "manage" "manage_failed_services"
 add_action "manage_service_logs" "查看服务日志" "manage" "manage_service_logs"
+add_script "manage_hostname" "主机名管理" "manage" "modules/standalone/manage_hostname.sh"
+add_script "manage_services" "Systemd 服务管理" "manage" "modules/standalone/manage_services.sh"

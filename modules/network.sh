@@ -74,7 +74,55 @@ network_listening_ports() {
     fi
 }
 
+network_port_lookup() {
+    local input=""
+    local port=""
+
+    printf "请输入要查询的端口号，多个用逗号分隔: "
+    read -r input
+    if [ -z "$input" ]; then
+        printf "%b[WARN]%b 端口号不能为空。\n" "$YELLOW" "$PLAIN"
+        return 1
+    fi
+
+    printf "\n%b== 指定端口查询 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    input="${input//,/ }"
+    for port in $input; do
+        if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+            printf "%b[WARN]%b 跳过无效端口: %s\n" "$YELLOW" "$PLAIN" "$port"
+            continue
+        fi
+
+        printf "%b端口 %s:%b\n" "$BOLD" "$port" "$PLAIN"
+        if command_exists ss; then
+            ss -tulpenH 2>/dev/null | awk -v port="$port" '
+                $5 ~ ":" port "$" {
+                    process = ($NF == "" ? "-" : $NF)
+                    printf "  协议: %-5s 状态: %-10s 本地地址: %-24s 进程: %s\n", $1, $2, $5, process
+                    found = 1
+                }
+                END { if (!found) printf "  未发现监听。\n" }
+            '
+        elif command_exists netstat; then
+            netstat -tulnp 2>/dev/null | awk -v port="$port" '
+                NR > 2 && $4 ~ ":" port "$" {
+                    process = ($7 == "" ? "-" : $7)
+                    printf "  协议: %-5s 状态: %-10s 本地地址: %-24s 进程: %s\n", $1, $6, $4, process
+                    found = 1
+                }
+                END { if (!found) printf "  未发现监听。\n" }
+            '
+        else
+            printf "%b[ERROR]%b 未找到 ss 或 netstat。\n" "$RED" "$PLAIN"
+            return 1
+        fi
+        printf "\n"
+    done
+}
+
 add_action "network_overview" "网络概览" "network" "network_overview"
 add_action "network_connectivity" "连通性检查" "network" "network_connectivity_check"
 add_action "network_dns_lookup" "DNS 查询" "network" "network_dns_lookup"
 add_action "network_listening_ports" "监听端口" "network" "network_listening_ports"
+add_action "network_port_lookup" "指定端口查询" "network" "network_port_lookup"
+add_script "network_manage_ports" "端口管理" "network" "modules/standalone/manage_ports.sh"

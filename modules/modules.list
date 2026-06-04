@@ -12,3 +12,7 @@ lib.sh
 standalone/change_ssh_port.sh
 standalone/change_ssh_auth.sh
 standalone/install_fail2ban.sh
+standalone/manage_crontab.sh
+standalone/manage_hostname.sh
+standalone/manage_ports.sh
+standalone/manage_services.sh

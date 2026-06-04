@@ -28,6 +28,14 @@ check_root() {
     fi
 }
 
+require_root_action() {
+    if [ "$(id -u)" -ne 0 ]; then
+        msg_err "此操作需要 root 权限"
+        return 1
+    fi
+    return 0
+}
+
 # --- 方向键 是/否 选择器 ---
 # 用法: yesno_select "提示文字" [default]
 #   default: "y" 或 "n"（默认 n）
