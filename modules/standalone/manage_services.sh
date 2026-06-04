@@ -290,7 +290,7 @@ operate_services() {
     local service=""
     local -a selected=()
 
-    printf "\n请输入要操作的服务编号，多个用空格分隔，留空返回: "
+    printf '\n%b' "$(msg_prompt "输入" "请输入要操作的服务编号，多个用空格分隔，留空返回: ")"
     read -r selection
     [ -n "$selection" ] || return 0
 
@@ -308,7 +308,7 @@ operate_services() {
     printf "  2) 停止服务\n"
     printf "  3) 关闭开机自启\n"
     printf "  4) 卸载用户安装服务\n"
-    printf "选择 [1-4]: "
+    printf '%b' "$(msg_prompt "输入" "选择 [1-4]: ")"
     read -r action
 
     case "$action" in
@@ -331,7 +331,7 @@ main() {
 
     while true; do
         printf "%b== Systemd 服务管理 ========================================%b\n\n" "$BOLD" "$PLAIN"
-        printf "输入关键词过滤服务（回车列全部，q 退出）: "
+        printf '%b' "$(msg_prompt "输入" "输入关键词过滤服务（回车列全部，q 退出）: ")"
         read -r filter
         case "$filter" in
             q|Q) return 0 ;;
@@ -340,14 +340,14 @@ main() {
         msg_info "正在收集服务列表..."
         collect_services "$filter"
         print_services_table || {
-            printf "\n按 Enter 继续..."
+            printf '\n%b' "$(msg_prompt "提示" "按 Enter 继续...")"
             read -r _
             clear 2>/dev/null || true
             continue
         }
         operate_services
 
-        printf "\n按 Enter 继续..."
+        printf '\n%b' "$(msg_prompt "提示" "按 Enter 继续...")"
         read -r _
         clear 2>/dev/null || true
     done

@@ -7,7 +7,7 @@ manage_require_systemctl() {
         return 0
     fi
 
-    printf "%b[ERROR]%b 未找到 systemctl。\n" "$RED" "$PLAIN"
+    ui_error "未找到 systemctl。"
     return 1
 }
 
@@ -21,10 +21,10 @@ manage_service_status() {
     local main_pid=""
 
     manage_require_systemctl || return 1
-    printf "请输入服务名（例如 ssh、nginx、docker）: "
+    printf '%b' "$(ui_prompt "输入" "请输入服务名（例如 ssh、nginx、docker）: ")"
     read -r service
     if [ -z "$service" ]; then
-        printf "%b[WARN]%b 服务名不能为空。\n" "$YELLOW" "$PLAIN"
+        ui_warn "服务名不能为空。"
         return 1
     fi
 
@@ -37,7 +37,7 @@ manage_service_status() {
     main_pid="$(systemctl show "$service" -p MainPID --value 2>/dev/null || true)"
 
     if [ -z "$load_state" ] || [ "$load_state" = "not-found" ]; then
-        printf "%b[ERROR]%b 服务不存在或无法读取: %s\n" "$RED" "$PLAIN" "$service"
+        ui_error "服务不存在或无法读取: $service"
         return 1
     fi
 
@@ -57,7 +57,7 @@ manage_failed_services() {
     printf "%b== 失败服务 ========================================%b\n\n" "$BOLD" "$PLAIN"
 
     failed_output="$(systemctl --failed --no-legend --plain 2>/dev/null)" || {
-        printf "%b[ERROR]%b 读取失败服务列表失败。\n" "$RED" "$PLAIN"
+        ui_error "读取失败服务列表失败。"
         return 1
     }
 
@@ -85,22 +85,22 @@ manage_service_logs() {
     local lines=""
 
     if ! command_exists journalctl; then
-        printf "%b[ERROR]%b 未找到 journalctl。\n" "$RED" "$PLAIN"
+        ui_error "未找到 journalctl。"
         return 1
     fi
 
-    printf "请输入服务名（例如 ssh、nginx、docker）: "
+    printf '%b' "$(ui_prompt "输入" "请输入服务名（例如 ssh、nginx、docker）: ")"
     read -r service
     if [ -z "$service" ]; then
-        printf "%b[WARN]%b 服务名不能为空。\n" "$YELLOW" "$PLAIN"
+        ui_warn "服务名不能为空。"
         return 1
     fi
 
-    printf "显示最近多少行日志（默认 80）: "
+    printf '%b' "$(ui_prompt "输入" "显示最近多少行日志（默认 80）: ")"
     read -r lines
     lines="${lines:-80}"
     if ! [[ "$lines" =~ ^[0-9]+$ ]] || [ "$lines" -lt 1 ]; then
-        printf "%b[WARN]%b 行数无效，使用默认 80。\n" "$YELLOW" "$PLAIN"
+        ui_warn "行数无效，使用默认 80。"
         lines="80"
     fi
 

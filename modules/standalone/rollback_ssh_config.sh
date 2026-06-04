@@ -111,7 +111,7 @@ main() {
     show_current_config
     print_backups
 
-    printf "\n选择要回滚的备份编号（默认 1，最新）: "
+    printf '\n%b' "$(msg_prompt "输入" "选择要回滚的备份编号（默认 1，最新）: ")"
     read -r selection
     selection="${selection:-1}"
     selected_backup="$(backup_from_selection "$selection")" || {

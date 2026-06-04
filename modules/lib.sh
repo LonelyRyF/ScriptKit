@@ -13,12 +13,31 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 PLAIN='\033[0m'
+BG_BLUE='\033[1;44m'
+BG_GREEN='\033[1;42m'
+BG_YELLOW='\033[1;43m'
+BG_RED='\033[1;41m'
 
 # --- 消息函数 ---
-msg_info()  { printf "%b[INFO]%b %s\n" "$CYAN" "$PLAIN" "$1"; }
-msg_ok()    { printf "%b[OK]%b %s\n" "$GREEN" "$PLAIN" "$1"; }
-msg_warn()  { printf "%b[WARN]%b %s\n" "$YELLOW" "$PLAIN" "$1"; }
-msg_err()   { printf "%b[ERROR]%b %s\n" "$RED" "$PLAIN" "$1"; }
+msg_badge() {
+    local bg="$1"
+    local label="$2"
+    local fg="$3"
+    local message="$4"
+    printf '%b %s %b %b%s%b\n' "$bg" "$label" "$PLAIN" "$fg" "$message" "$PLAIN"
+}
+
+msg_prompt() {
+    local label="$1"
+    local message="$2"
+    printf '%b %s %b %s' "$BG_BLUE" "$label" "$PLAIN" "$message"
+}
+
+msg_info()  { msg_badge "$BG_BLUE" "提示" "$CYAN" "$1"; }
+msg_ok()    { msg_badge "$BG_GREEN" "完成" "$GREEN" "$1"; }
+msg_warn()  { msg_badge "$BG_YELLOW" "警告" "$YELLOW" "$1"; }
+msg_err()   { msg_badge "$BG_RED" "错误" "$RED" "$1"; }
+msg_cancelled() { msg_badge "$BG_BLUE" "提示" "$RED" "操作已取消"; }
 
 # --- 权限检查 ---
 check_root() {
@@ -44,12 +63,14 @@ yesno_select() {
     local prompt="$1"
     local default="${2:-n}"
     local cursor=1  # 0=是, 1=否
+    local decorated_prompt=""
     [ "$default" = "y" ] && cursor=0
+    decorated_prompt="$(msg_prompt "确认" "$prompt")"
 
     # fallback: 无 tput 时用文本输入
-    if ! command -v tput &>/dev/null || ! tput cup 0 0 &>/dev/null 2>&1; then
+    if ! command -v tput &>/dev/null || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 &>/dev/null 2>&1; then
         local ans=""
-        printf "%s [y/N]: " "$prompt"
+        printf "%b [y/N]: " "$decorated_prompt"
         read -r ans
         ans=$(printf '%s' "${ans:-$default}" | tr '[:upper:]' '[:lower:]')
         [ "$ans" = "y" ] && return 0 || return 1
@@ -70,7 +91,7 @@ yesno_select() {
     }
 
     tput civis 2>/dev/null || true
-    printf "%s\n\n\n" "$prompt"
+    printf "%b\n\n\n" "$decorated_prompt"
     _draw_yesno
 
     while true; do
@@ -91,9 +112,9 @@ yesno_select() {
     tput cuu 3 2>/dev/null || printf '\033[3A'
     tput el 2>/dev/null || printf '\033[K'
     if [ "$cursor" -eq 0 ]; then
-        printf "%s 是\n" "$prompt"
+        printf "%b 是\n" "$decorated_prompt"
     else
-        printf "%s 否\n" "$prompt"
+        printf "%b 否\n" "$decorated_prompt"
     fi
     tput dl1 2>/dev/null || printf '\033[M'
     tput dl1 2>/dev/null || printf '\033[M'

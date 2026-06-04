@@ -75,7 +75,7 @@ system_info_memory() {
             }
         ' /proc/meminfo
     else
-        printf "%b[WARN]%b 未找到 free，也无法读取 /proc/meminfo。\n" "$YELLOW" "$PLAIN"
+        ui_warn "未找到 free，也无法读取 /proc/meminfo。"
     fi
 }
 
@@ -92,7 +92,7 @@ system_info_disk() {
             }
         '
     else
-        printf "%b[WARN]%b 未找到 df。\n" "$YELLOW" "$PLAIN"
+        ui_warn "未找到 df。"
     fi
 
     if command_exists lsblk; then
@@ -109,23 +109,23 @@ system_info_process_top() {
             NR <= 11 { printf "%-8s %-12s %-8s %-8s %s\n", $1, $2, $3, $4, $5 }
         '
     else
-        printf "%b[WARN]%b 未找到 ps。\n" "$YELLOW" "$PLAIN"
+        ui_warn "未找到 ps。"
     fi
 }
 
 system_info_dir_size() {
     local path=""
 
-    printf "请输入要统计的目录（默认当前目录）: "
+    printf '%b' "$(ui_prompt "输入" "请输入要统计的目录（默认当前目录）: ")"
     read -r path
     path="${path:-.}"
 
     if [ ! -d "$path" ]; then
-        printf "%b[ERROR]%b 目录不存在: %s\n" "$RED" "$PLAIN" "$path"
+        ui_error "目录不存在: $path"
         return 1
     fi
     if ! command_exists du || ! command_exists sort || ! command_exists awk; then
-        printf "%b[ERROR]%b 需要 du、sort、awk。\n" "$RED" "$PLAIN"
+        ui_error "需要 du、sort、awk。"
         return 1
     fi
 
@@ -143,7 +143,7 @@ system_info_dir_size() {
 system_info_tcp_connections() {
     printf "%b== TCP 连接统计 ========================================%b\n\n" "$BOLD" "$PLAIN"
     if ! command_exists ss || ! command_exists awk; then
-        printf "%b[ERROR]%b 需要 ss 和 awk。\n" "$RED" "$PLAIN"
+        ui_error "需要 ss 和 awk。"
         return 1
     fi
 
@@ -162,7 +162,7 @@ system_info_tcp_connections() {
 system_info_http_connections() {
     printf "%b== HTTP(S) TCP 连接统计 ========================================%b\n\n" "$BOLD" "$PLAIN"
     if ! command_exists ss || ! command_exists awk; then
-        printf "%b[ERROR]%b 需要 ss 和 awk。\n" "$RED" "$PLAIN"
+        ui_error "需要 ss 和 awk。"
         return 1
     fi
 

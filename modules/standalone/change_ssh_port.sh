@@ -83,7 +83,7 @@ main() {
     # 输入新端口
     local new_port=""
     while true; do
-        printf "请输入新的 SSH 端口号 [1-65535]: "
+        printf '%b' "$(msg_prompt "输入" "请输入新的 SSH 端口号 [1-65535]: ")"
         read -r new_port
         if ! validate_port "$new_port"; then
             msg_err "无效的端口号，请输入 1-65535 之间的数字"

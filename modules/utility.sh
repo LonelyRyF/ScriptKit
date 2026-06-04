@@ -13,14 +13,14 @@ utility_public_ip() {
         ip="$(wget -qO- --timeout=8 https://api.ipify.org 2>/dev/null || true)"
         [ -z "$ip" ] && ip="$(wget -qO- --timeout=8 https://ifconfig.me 2>/dev/null || true)"
     else
-        printf "%b[ERROR]%b 未找到 curl 或 wget。\n" "$RED" "$PLAIN"
+        ui_error "未找到 curl 或 wget。"
         return 1
     fi
 
     if [ -n "$ip" ]; then
         printf "公网 IP: %s\n" "$ip"
     else
-        printf "%b[ERROR]%b 获取公网 IP 失败。\n" "$RED" "$PLAIN"
+        ui_error "获取公网 IP 失败。"
         return 1
     fi
 }
@@ -29,11 +29,11 @@ utility_random_password() {
     local length=""
     local password=""
 
-    printf "密码长度（默认 24，范围 8-128）: "
+    printf '%b' "$(ui_prompt "输入" "密码长度（默认 24，范围 8-128）: ")"
     read -r length
     length="${length:-24}"
     if ! [[ "$length" =~ ^[0-9]+$ ]] || [ "$length" -lt 8 ] || [ "$length" -gt 128 ]; then
-        printf "%b[WARN]%b 长度无效，使用默认 24。\n" "$YELLOW" "$PLAIN"
+        ui_warn "长度无效，使用默认 24。"
         length="24"
     fi
 
@@ -42,12 +42,12 @@ utility_random_password() {
     elif [ -r /dev/urandom ] && command_exists tr && command_exists head; then
         password="$(LC_ALL=C tr -dc 'A-Za-z0-9_@#%+=-' < /dev/urandom | head -c "$length")"
     else
-        printf "%b[ERROR]%b 未找到可用的随机源或处理命令。\n" "$RED" "$PLAIN"
+        ui_error "未找到可用的随机源或处理命令。"
         return 1
     fi
 
     if [ -z "$password" ]; then
-        printf "%b[ERROR]%b 生成密码失败。\n" "$RED" "$PLAIN"
+        ui_error "生成密码失败。"
         return 1
     fi
 

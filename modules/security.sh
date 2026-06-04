@@ -71,7 +71,7 @@ security_ssh_status() {
     printf "%b== SSH 状态 ========================================%b\n\n" "$BOLD" "$PLAIN"
     printf "配置文件: %s\n" "$config"
     if [ ! -r "$config" ]; then
-        printf "%b[ERROR]%b 无法读取 SSH 配置文件。\n" "$RED" "$PLAIN"
+        ui_error "无法读取 SSH 配置文件。"
         return 1
     fi
 

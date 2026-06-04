@@ -71,7 +71,7 @@ add_crontab_job() {
     local weekday=""
     local job=""
 
-    printf "请输入要调度的命令: "
+    printf '%b' "$(msg_prompt "输入" "请输入要调度的命令: ")"
     read -r job_cmd
     if [ -z "$job_cmd" ]; then
         msg_warn "命令不能为空"
@@ -84,7 +84,7 @@ add_crontab_job() {
     printf "  3) 每天固定小时\n"
     printf "  4) 每周固定星期\n"
     printf "  5) 自定义 cron 表达式\n"
-    printf "选择 [1-5]: "
+    printf '%b' "$(msg_prompt "输入" "选择 [1-5]: ")"
     read -r schedule_type
 
     case "$schedule_type" in
@@ -95,7 +95,7 @@ add_crontab_job() {
             schedule="0 * * * *"
             ;;
         3)
-            printf "每天几点执行？[0-23]: "
+            printf '%b' "$(msg_prompt "输入" "每天几点执行？[0-23]: ")"
             read -r hour
             if ! valid_hour "$hour"; then
                 msg_warn "小时无效"
@@ -104,7 +104,7 @@ add_crontab_job() {
             schedule="0 $hour * * *"
             ;;
         4)
-            printf "星期几执行？[0-6，0=星期日]: "
+            printf '%b' "$(msg_prompt "输入" "星期几执行？[0-6，0=星期日]: ")"
             read -r weekday
             if ! valid_weekday "$weekday"; then
                 msg_warn "星期值无效"
@@ -113,7 +113,7 @@ add_crontab_job() {
             schedule="0 0 * * $weekday"
             ;;
         5)
-            printf "请输入 5 段 cron 表达式: "
+            printf '%b' "$(msg_prompt "输入" "请输入 5 段 cron 表达式: ")"
             read -r schedule
             if [ -z "$schedule" ]; then
                 msg_warn "cron 表达式不能为空"
@@ -157,7 +157,7 @@ delete_crontab_job() {
     fi
 
     show_crontab
-    printf "\n请输入要删除的任务编号: "
+    printf '\n%b' "$(msg_prompt "输入" "请输入要删除的任务编号: ")"
     read -r line_no
     if ! [[ "$line_no" =~ ^[0-9]+$ ]] || [ "$line_no" -lt 1 ]; then
         msg_warn "编号无效"
@@ -194,7 +194,7 @@ main() {
         printf "  2) 添加任务\n"
         printf "  3) 删除任务\n"
         printf "  0) 退出\n\n"
-        printf "请选择 [0-3]: "
+        printf '%b' "$(msg_prompt "输入" "请选择 [0-3]: ")"
         read -r choice
 
         case "$choice" in
@@ -205,7 +205,7 @@ main() {
             *) msg_warn "无效选择" ;;
         esac
 
-        printf "\n按 Enter 继续..."
+        printf '\n%b' "$(msg_prompt "提示" "按 Enter 继续...")"
         read -r _
         clear 2>/dev/null || true
     done

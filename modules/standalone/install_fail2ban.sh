@@ -94,15 +94,15 @@ main() {
     printf '\n'
 
     # --- 参数配置 ---
-    printf "设置封禁时长 （默认 3600 秒，-1 为永久）: "
+    printf '%b' "$(msg_prompt "输入" "设置封禁时长 （默认 3600 秒，-1 为永久）: ")"
     read -r input_bantime
     local bantime="${input_bantime:-3600}"
 
-    printf "设置检测时间窗口（默认 600 秒）: "
+    printf '%b' "$(msg_prompt "输入" "设置检测时间窗口（默认 600 秒）: ")"
     read -r input_findtime
     local findtime="${input_findtime:-600}"
 
-    printf "设置最大重试次数（默认 5 次）: "
+    printf '%b' "$(msg_prompt "输入" "设置最大重试次数（默认 5 次）: ")"
     read -r input_maxretry
     local maxretry="${input_maxretry:-5}"
 
@@ -112,9 +112,9 @@ main() {
     local sender_email=""
     if yesno_select "是否启用封禁邮件通知？"; then
         enable_mail="y"
-        printf "接收通知的邮箱: "
+        printf '%b' "$(msg_prompt "输入" "接收通知的邮箱: ")"
         read -r dest_email
-        printf "发件人邮箱（默认 fail2ban@localhost）: "
+        printf '%b' "$(msg_prompt "输入" "发件人邮箱（默认 fail2ban@localhost）: ")"
         read -r sender_email
         sender_email="${sender_email:-fail2ban@localhost}"
     fi

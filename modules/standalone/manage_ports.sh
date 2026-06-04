@@ -68,7 +68,7 @@ lookup_ports() {
     local ports=""
     local port=""
 
-    printf "请输入要查询的端口号，多个用逗号分隔: "
+    printf '%b' "$(msg_prompt "输入" "请输入要查询的端口号，多个用逗号分隔: ")"
     read -r input
     ports="$(normalize_ports "$input")"
     if [ -z "$ports" ]; then
@@ -161,7 +161,7 @@ terminate_port_processes() {
 
     require_root_action || return 1
 
-    printf "请输入要停止占用进程的端口号: "
+    printf '%b' "$(msg_prompt "输入" "请输入要停止占用进程的端口号: ")"
     read -r port
     if ! validate_port "$port"; then
         msg_warn "端口号无效"
@@ -237,7 +237,7 @@ block_ports_firewall() {
 
     require_root_action || return 1
 
-    printf "请输入要封禁的端口号，多个用逗号分隔: "
+    printf '%b' "$(msg_prompt "输入" "请输入要封禁的端口号，多个用逗号分隔: ")"
     read -r input
     ports="$(normalize_ports "$input")"
     if [ -z "$ports" ]; then
@@ -284,7 +284,7 @@ main() {
         printf "  3) 停止占用指定端口的进程\n"
         printf "  4) 使用防火墙封禁端口\n"
         printf "  0) 退出\n\n"
-        printf "请选择 [0-4]: "
+        printf '%b' "$(msg_prompt "输入" "请选择 [0-4]: ")"
         read -r choice
 
         case "$choice" in
@@ -296,7 +296,7 @@ main() {
             *) msg_warn "无效选择" ;;
         esac
 
-        printf "\n按 Enter 继续..."
+        printf '\n%b' "$(msg_prompt "提示" "按 Enter 继续...")"
         read -r _
         clear 2>/dev/null || true
     done

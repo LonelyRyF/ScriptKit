@@ -70,7 +70,7 @@ select_source_url() {
     local url=""
 
     show_sources >&2
-    printf "\n请选择入口 [1-%d]（默认 3）: " "${#LINUXMIRRORS_LABELS[@]}" >&2
+    printf '\n%b' "$(msg_prompt "输入" "请选择入口 [1-${#LINUXMIRRORS_LABELS[@]}]（默认 3）: ")" >&2
     read -r choice
     choice="${choice:-3}"
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#LINUXMIRRORS_LABELS[@]}" ]; then
@@ -80,7 +80,7 @@ select_source_url() {
 
     url="${LINUXMIRRORS_URLS[$((choice - 1))]}"
     if [ -z "$url" ]; then
-        printf "请输入自定义 HTTPS URL: " >&2
+        printf '%b' "$(msg_prompt "输入" "请输入自定义 HTTPS URL: ")" >&2
         read -r url
     fi
     if ! valid_https_url "$url"; then

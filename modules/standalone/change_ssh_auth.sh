@@ -50,7 +50,7 @@ do_allow_root_key_only() {
 
 do_generate_keypair() {
     local target_user=""
-    printf "为哪个用户生成密钥对？（默认当前用户 root）: "
+    printf '%b' "$(msg_prompt "输入" "为哪个用户生成密钥对？（默认当前用户 root）: ")"
     read -r target_user
     target_user="${target_user:-root}"
 
@@ -72,7 +72,7 @@ do_generate_keypair() {
     printf "\n选择密钥类型:\n"
     printf "  1) ed25519（推荐，更安全更快）\n"
     printf "  2) rsa（4096位，兼容性好）\n"
-    printf "选择 [1/2]（默认 1）: "
+    printf '%b' "$(msg_prompt "输入" "选择 [1/2]（默认 1）: ")"
     read -r key_type
     key_type="${key_type:-1}"
 
@@ -98,12 +98,12 @@ do_generate_keypair() {
     fi
 
     local comment=""
-    printf "密钥注释（默认 %s@%s）: " "$target_user" "$(hostname)"
+    printf '%b' "$(msg_prompt "输入" "密钥注释（默认 ${target_user}@$(hostname)）: ")"
     read -r comment
     comment="${comment:-${target_user}@$(hostname)}"
 
     local passphrase=""
-    printf "是否设置密钥密码？（直接回车为空密码）: "
+    printf '%b' "$(msg_prompt "输入" "是否设置密钥密码？（直接回车为空密码）: ")"
     read -rs passphrase
     printf '\n'
     passphrase="${passphrase:-}"
@@ -135,7 +135,7 @@ do_add_pubkey() {
     local default_user="${1:-root}"
     local default_pubkey="${2:-}"
     local target_user=""
-    printf "为哪个用户添加公钥？（默认 %s）: " "$default_user"
+    printf '%b' "$(msg_prompt "输入" "为哪个用户添加公钥？（默认 ${default_user}）: ")"
     read -r target_user
     target_user="${target_user:-$default_user}"
 

@@ -145,7 +145,7 @@ main() {
     printf "%b== 主机名管理 ========================================%b\n\n" "$BOLD" "$PLAIN"
     current_hostname="$(hostname 2>/dev/null || true)"
     printf "当前主机名: %s\n" "${current_hostname:-unknown}"
-    printf "新的主机名: "
+    printf '%b' "$(msg_prompt "输入" "新的主机名: ")"
     read -r new_hostname
 
     if ! validate_hostname "$new_hostname"; then

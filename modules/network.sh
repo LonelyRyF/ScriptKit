@@ -13,7 +13,7 @@ network_overview() {
         printf "\n%b默认路由:%b\n" "$BOLD" "$PLAIN"
         ip route show default 2>/dev/null | awk '{ printf "  网关: %s  接口: %s\n", $3, $5 }'
     else
-        printf "%b[WARN]%b 未找到 ip 命令。\n" "$YELLOW" "$PLAIN"
+        ui_warn "未找到 ip 命令。"
     fi
 
     if [ -r /etc/resolv.conf ]; then
@@ -28,7 +28,7 @@ network_connectivity_check() {
 
     printf "%b== 连通性检查 ========================================%b\n\n" "$BOLD" "$PLAIN"
     if ! command_exists ping; then
-        printf "%b[ERROR]%b 未找到 ping。\n" "$RED" "$PLAIN"
+        ui_error "未找到 ping。"
         return 1
     fi
 
@@ -45,7 +45,7 @@ network_connectivity_check() {
 network_dns_lookup() {
     local domain=""
 
-    printf "请输入要查询的域名（默认 github.com）: "
+    printf '%b' "$(ui_prompt "输入" "请输入要查询的域名（默认 github.com）: ")"
     read -r domain
     domain="${domain:-github.com}"
 
@@ -57,7 +57,7 @@ network_dns_lookup() {
     elif command_exists getent; then
         getent hosts "$domain" | awk '{ print "  " $1 }'
     else
-        printf "%b[ERROR]%b 未找到 dig、nslookup 或 getent。\n" "$RED" "$PLAIN"
+        ui_error "未找到 dig、nslookup 或 getent。"
         return 1
     fi
 }
@@ -69,7 +69,7 @@ network_listening_ports() {
     elif command_exists netstat; then
         netstat -tuln 2>/dev/null | awk 'NR > 2 { printf "协议: %-5s 本地地址: %-24s 状态: %s\n", $1, $4, $6 }'
     else
-        printf "%b[ERROR]%b 未找到 ss 或 netstat。\n" "$RED" "$PLAIN"
+        ui_error "未找到 ss 或 netstat。"
         return 1
     fi
 }
@@ -78,10 +78,10 @@ network_port_lookup() {
     local input=""
     local port=""
 
-    printf "请输入要查询的端口号，多个用逗号分隔: "
+    printf '%b' "$(ui_prompt "输入" "请输入要查询的端口号，多个用逗号分隔: ")"
     read -r input
     if [ -z "$input" ]; then
-        printf "%b[WARN]%b 端口号不能为空。\n" "$YELLOW" "$PLAIN"
+        ui_warn "端口号不能为空。"
         return 1
     fi
 
@@ -89,7 +89,7 @@ network_port_lookup() {
     input="${input//,/ }"
     for port in $input; do
         if ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
-            printf "%b[WARN]%b 跳过无效端口: %s\n" "$YELLOW" "$PLAIN" "$port"
+            ui_warn "跳过无效端口: $port"
             continue
         fi
 
@@ -113,7 +113,7 @@ network_port_lookup() {
                 END { if (!found) printf "  未发现监听。\n" }
             '
         else
-            printf "%b[ERROR]%b 未找到 ss 或 netstat。\n" "$RED" "$PLAIN"
+            ui_error "未找到 ss 或 netstat。"
             return 1
         fi
         printf "\n"

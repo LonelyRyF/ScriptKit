@@ -10,6 +10,10 @@ CYAN='\033[36m'
 BOLD='\033[1m'
 ITALIC='\033[3m'
 PLAIN='\033[0m'
+BG_BLUE='\033[1;44m'
+BG_GREEN='\033[1;42m'
+BG_YELLOW='\033[1;43m'
+BG_RED='\033[1;41m'
 
 ROOT_MENU="main"
 CURRENT_MENU="$ROOT_MENU"
@@ -33,6 +37,32 @@ declare -a LOADED_MODULES=()
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+ui_label() {
+    local color="$1"
+    local label="$2"
+    printf '%b %s %b' "$color" "$label" "$PLAIN"
+}
+
+ui_message() {
+    local bg="$1"
+    local label="$2"
+    local fg="$3"
+    local message="$4"
+    printf '%b %s %b %b%s%b\n' "$bg" "$label" "$PLAIN" "$fg" "$message" "$PLAIN"
+}
+
+ui_info() { ui_message "$BG_BLUE" "提示" "$CYAN" "$1"; }
+ui_ok() { ui_message "$BG_GREEN" "完成" "$GREEN" "$1"; }
+ui_warn() { ui_message "$BG_YELLOW" "警告" "$YELLOW" "$1"; }
+ui_error() { ui_message "$BG_RED" "错误" "$RED" "$1"; }
+ui_cancel() { ui_message "$BG_BLUE" "提示" "$RED" "$1"; }
+
+ui_prompt() {
+    local label="$1"
+    local message="$2"
+    printf '%b %s %b %s' "$BG_BLUE" "$label" "$PLAIN" "$message"
 }
 
 record_menu_warning() {
@@ -99,13 +129,14 @@ add_script() {
 }
 
 pause_screen() {
-    printf "\n%s" "按 Enter 返回菜单..."
+    printf '\n%b' "$(ui_prompt "提示" "按 Enter 返回菜单...")"
     read -r _
 }
 
 yesno_select() {
     local prompt="$1"
     local default="${2:-n}"
+    local prompt_title=""
     local -a values=()
 
     ITEM_TITLES["__yes"]="是"
@@ -121,14 +152,16 @@ yesno_select() {
         values=("__no" "__yes")
     fi
 
-    select_list "$prompt" "${values[@]}"
+    prompt_title="$(ui_prompt "确认" "$prompt")"
+    select_list "$prompt_title" "${values[@]}"
     [ "$SELECT_RESULT" = "__yes" ]
 }
 
 cleanup() {
     tput cnorm 2>/dev/null || true
     tput rmcup 2>/dev/null || true
-    printf "\n%b操作已取消。%b\n" "$RED" "$PLAIN"
+    printf '\n'
+    ui_cancel "操作已取消"
     exit 130
 }
 
@@ -378,13 +411,13 @@ interactive_select_list() {
         printf '/            搜索当前菜单，空输入清除搜索\n'
         printf 'Esc          清除当前搜索\n'
         printf 'q            退出 ScriptKit\n'
-        printf '\n按任意键返回菜单...'
+        printf '\n%b' "$(ui_prompt "提示" "按任意键返回菜单...")"
         read_key >/dev/null
     }
 
     prompt_search() {
         tput cnorm 2>/dev/null || true
-        printf '\n搜索关键词（空则显示全部）: '
+        printf '\n%b' "$(ui_prompt "输入" "搜索关键词（空则显示全部）: ")"
         IFS= read -r filter_text
         selected=0
         start=0
@@ -567,7 +600,7 @@ plain_select_list() {
             printf '输入数字并回车确认，输入 /关键词 搜索，输入 q 退出\n'
         fi
         printf '%bPowered by %b%s%b\n\n' "$ITALIC" "$CYAN" "rainyfall.dev" "$PLAIN"
-        printf '请选择 [1-%d]: ' "${#values[@]}"
+        printf '%b' "$(ui_prompt "输入" "请选择 [1-${#values[@]}]: ")"
         read -r input
         if [[ "$input" =~ ^[Qq]$ ]]; then
             SELECT_RESULT="__exit"
@@ -586,7 +619,7 @@ plain_select_list() {
             SELECT_RESULT="${values[$((input - 1))]}"
             return
         fi
-        printf "%b输入无效。%b\n" "$RED" "$PLAIN"
+        ui_error "输入无效。"
         sleep 1
     done
 }
@@ -606,7 +639,7 @@ run_action() {
     if declare -F "$handler" >/dev/null 2>&1; then
         "$handler"
     else
-        printf "%b[ERROR]%b 处理函数未找到: %s\n" "$RED" "$PLAIN" "$handler"
+        ui_error "处理函数未找到: $handler"
     fi
     pause_screen
 }
@@ -649,7 +682,7 @@ run_script() {
     if script_file="$(resolve_script_file "$script_path")"; then
         bash "$script_file"
     else
-        printf "%b[ERROR]%b 脚本未找到: %s\n" "$RED" "$PLAIN" "$script_path"
+        ui_error "脚本未找到: $script_path"
     fi
     pause_screen
 }
@@ -723,7 +756,7 @@ load_modules() {
                 loaded="true"
             done
         else
-            printf "%b[WARN]%b 远程模块下载失败，菜单可能不完整。\n" "$YELLOW" "$PLAIN" >&2
+            ui_warn "远程模块下载失败，菜单可能不完整。" >&2
             sleep 2
         fi
     fi
@@ -817,7 +850,8 @@ show_scriptkit_status() {
         printf "  %b未发现问题%b\n" "$GREEN" "$PLAIN"
     else
         for warning in "${MENU_WARNINGS[@]}"; do
-            printf "  %b[WARN]%b %s\n" "$YELLOW" "$PLAIN" "$warning"
+            printf '  '
+            ui_warn "$warning"
         done
     fi
 }
@@ -826,7 +860,7 @@ refresh_remote_module_cache() {
     printf "%b== 刷新远程模块缓存 ========================================%b\n\n" "$BOLD" "$PLAIN"
 
     if [ -z "$MODULE_BASE_URL" ] || [ -z "$MODULE_MANIFEST_URL" ]; then
-        printf "%b[ERROR]%b 未配置远程模块地址。\n" "$RED" "$PLAIN"
+        ui_error "未配置远程模块地址。"
         return 1
     fi
 
@@ -834,10 +868,10 @@ refresh_remote_module_cache() {
     printf "缓存目录: %s\n\n" "$MODULE_CACHE_DIR"
 
     if download_remote_modules; then
-        printf "%b[OK]%b 远程模块缓存已刷新。\n" "$GREEN" "$PLAIN"
-        printf "%b提示:%b 当前运行中的菜单不会自动重载，请重新启动 ScriptKit 后生效。\n" "$YELLOW" "$PLAIN"
+        ui_ok "远程模块缓存已刷新。"
+        ui_info "当前运行中的菜单不会自动重载，请重新启动 ScriptKit 后生效。"
     else
-        printf "%b[ERROR]%b 远程模块缓存刷新失败。\n" "$RED" "$PLAIN"
+        ui_error "远程模块缓存刷新失败。"
         return 1
     fi
 }
@@ -862,24 +896,24 @@ clear_module_cache() {
     printf "缓存目录: %s\n\n" "$MODULE_CACHE_DIR"
 
     if ! is_safe_cache_dir "$MODULE_CACHE_DIR"; then
-        printf "%b[ERROR]%b 缓存目录不安全，已拒绝清理。\n" "$RED" "$PLAIN"
+        ui_error "缓存目录不安全，已拒绝清理。"
         return 1
     fi
 
     if [ ! -d "$MODULE_CACHE_DIR" ]; then
-        printf "%b[INFO]%b 缓存目录不存在，无需清理。\n" "$CYAN" "$PLAIN"
+        ui_info "缓存目录不存在，无需清理。"
         return 0
     fi
 
     if ! yesno_select "确认清理模块缓存？"; then
-        printf "%b[INFO]%b 已取消清理。\n" "$CYAN" "$PLAIN"
+        ui_info "已取消清理。"
         return 0
     fi
 
     if rm -rf -- "$MODULE_CACHE_DIR"; then
-        printf "%b[OK]%b 模块缓存已清理。\n" "$GREEN" "$PLAIN"
+        ui_ok "模块缓存已清理。"
     else
-        printf "%b[ERROR]%b 模块缓存清理失败。\n" "$RED" "$PLAIN"
+        ui_error "模块缓存清理失败。"
         return 1
     fi
 }
@@ -965,7 +999,7 @@ main() {
     load_modules
     validate_menu_registry
     if [ "${#MENU_WARNINGS[@]}" -gt 0 ]; then
-        printf "%b[WARN]%b 菜单注册发现 %d 个问题，可在 ScriptKit 管理中查看。\n" "$YELLOW" "$PLAIN" "${#MENU_WARNINGS[@]}" >&2
+        ui_warn "菜单注册发现 ${#MENU_WARNINGS[@]} 个问题，可在 ScriptKit 管理中查看。" >&2
         sleep 2
     fi
     run_menu
