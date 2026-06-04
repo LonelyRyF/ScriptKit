@@ -275,7 +275,7 @@ select_menu() {
     }
 
     # 无法使用 tput 时回退到普通输入
-    if ! command -v tput &>/dev/null || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 &>/dev/null 2>&1; then
+    if ! command -v tput &>/dev/null || ! [ -t 0 ] || ! [ -t 2 ] || ! tput cup 0 0 &>/dev/null 2>&1; then
         local choice=""
 
         draw_title_bar "$title" >&2

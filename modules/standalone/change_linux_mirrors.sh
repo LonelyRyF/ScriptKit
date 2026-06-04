@@ -98,7 +98,6 @@ main() {
     local url=""
 
     require_root_action || exit 1
-    printf "%b== LinuxMirrors 换源 ========================================%b\n\n" "$BOLD" "$PLAIN"
     url="$(select_source_url)" || exit 1
     run_linuxmirrors "$url"
 }
