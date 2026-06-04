@@ -1,0 +1,10 @@
+# Source modules loaded by menu.sh
+security.sh
+
+# Shared library (sourced by standalone scripts)
+lib.sh
+
+# Standalone scripts used by add_script entries
+standalone/change_ssh_port.sh
+standalone/change_ssh_auth.sh
+standalone/install_fail2ban.sh
