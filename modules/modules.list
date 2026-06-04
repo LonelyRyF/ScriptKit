@@ -2,8 +2,11 @@
 system_info.sh
 network.sh
 manage.sh
+app.sh
 utility.sh
 security.sh
+test.sh
+reinstall.sh
 
 # Shared library (sourced by standalone scripts)
 lib.sh
@@ -14,7 +17,13 @@ standalone/change_ssh_auth.sh
 standalone/rollback_ssh_config.sh
 standalone/install_fail2ban.sh
 standalone/change_linux_mirrors.sh
+standalone/deploy_napcat.sh
 standalone/manage_crontab.sh
 standalone/manage_hostname.sh
 standalone/manage_ports.sh
 standalone/manage_services.sh
+standalone/auto_mount_disk.sh
+standalone/disk_test.sh
+standalone/terminal_setup.sh
+standalone/reinstall_system.sh
+standalone/installnet.sh

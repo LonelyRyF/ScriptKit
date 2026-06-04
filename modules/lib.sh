@@ -44,6 +44,139 @@ msg_warn()  { msg_badge "$BG_YELLOW" "警告" "$YELLOW" "$1"; }
 msg_err()   { msg_badge "$BG_RED" "错误" "$RED" "$1"; }
 msg_cancelled() { msg_badge "$BG_BLUE" "提示" "$RED" "操作已取消"; }
 
+# --- 常用辅助函数 ---
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+detect_os_id() {
+    local os_id=""
+
+    if [ -r /etc/os-release ]; then
+        os_id="$({
+            . /etc/os-release 2>/dev/null
+            printf '%s' "${ID:-}"
+        } 2>/dev/null)"
+    elif command_exists lsb_release; then
+        os_id="$(lsb_release -is 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+    fi
+
+    printf '%s' "$os_id"
+}
+
+install_packages() {
+    local os_id=""
+    local package=""
+    local -a packages=()
+    local -A seen=()
+
+    [ "$#" -gt 0 ] || return 0
+    require_root_action || return 1
+
+    for package in "$@"; do
+        [ -n "$package" ] || continue
+        if [ -n "${seen[$package]:-}" ]; then
+            continue
+        fi
+        seen["$package"]=1
+        packages+=("$package")
+    done
+
+    [ "${#packages[@]}" -gt 0 ] || return 0
+    os_id="$(detect_os_id)"
+
+    case "$os_id" in
+        debian|ubuntu|linuxmint)
+            apt-get update -y >/dev/null 2>&1 || return 1
+            DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}" >/dev/null 2>&1 || return 1
+            ;;
+        centos|rhel|fedora|rocky|almalinux|anolis|opencloudos|openeuler)
+            if command_exists dnf; then
+                dnf install -y "${packages[@]}" >/dev/null 2>&1 || return 1
+            elif command_exists yum; then
+                yum install -y "${packages[@]}" >/dev/null 2>&1 || return 1
+            else
+                return 1
+            fi
+            ;;
+        arch|manjaro)
+            pacman -Sy --noconfirm --needed "${packages[@]}" >/dev/null 2>&1 || return 1
+            ;;
+        opensuse*|suse)
+            zypper --non-interactive install "${packages[@]}" >/dev/null 2>&1 || return 1
+            ;;
+        alpine)
+            apk add --no-cache "${packages[@]}" >/dev/null 2>&1 || return 1
+            ;;
+        openwrt)
+            opkg update >/dev/null 2>&1 || return 1
+            opkg install "${packages[@]}" >/dev/null 2>&1 || return 1
+            ;;
+        *)
+            msg_err "不支持的发行版，无法自动安装: ${packages[*]}"
+            return 1
+            ;;
+    esac
+}
+
+ensure_commands() {
+    local spec=""
+    local command_name=""
+    local package_name=""
+    local -a packages=()
+
+    for spec in "$@"; do
+        [ -n "$spec" ] || continue
+        case "$spec" in
+            *:*)
+                command_name="${spec%%:*}"
+                package_name="${spec#*:}"
+                ;;
+            *)
+                command_name="$spec"
+                package_name="$spec"
+                ;;
+        esac
+
+        if ! command_exists "$command_name"; then
+            packages+=("$package_name")
+        fi
+    done
+
+    if [ "${#packages[@]}" -gt 0 ]; then
+        msg_info "正在安装依赖: ${packages[*]}"
+        install_packages "${packages[@]}" || {
+            msg_err "依赖安装失败: ${packages[*]}"
+            return 1
+        }
+    fi
+
+    for spec in "$@"; do
+        [ -n "$spec" ] || continue
+        case "$spec" in
+            *:*) command_name="${spec%%:*}" ;;
+            *) command_name="$spec" ;;
+        esac
+        if ! command_exists "$command_name"; then
+            msg_err "未找到命令: $command_name"
+            return 1
+        fi
+    done
+}
+
+download_file() {
+    local url="$1"
+    local output="$2"
+
+    if command_exists curl; then
+        curl -fsSL "$url" -o "$output"
+    elif command_exists wget; then
+        wget -qO "$output" "$url"
+    else
+        return 1
+    fi
+}
+
 # --- 权限检查 ---
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then

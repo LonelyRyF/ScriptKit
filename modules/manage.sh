@@ -114,3 +114,4 @@ add_action "manage_service_logs" "查看服务日志" "manage" "manage_service_l
 add_script "manage_hostname" "主机名管理" "manage" "modules/standalone/manage_hostname.sh"
 add_script "manage_services" "Systemd 服务管理" "manage" "modules/standalone/manage_services.sh"
 add_script "manage_linux_mirrors" "LinuxMirrors 换源" "manage" "modules/standalone/change_linux_mirrors.sh"
+add_script "manage_auto_mount_disk" "自动挂载数据盘" "manage" "modules/standalone/auto_mount_disk.sh"
