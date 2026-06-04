@@ -11,7 +11,9 @@ lib.sh
 # Standalone scripts used by add_script entries
 standalone/change_ssh_port.sh
 standalone/change_ssh_auth.sh
+standalone/rollback_ssh_config.sh
 standalone/install_fail2ban.sh
+standalone/change_linux_mirrors.sh
 standalone/manage_crontab.sh
 standalone/manage_hostname.sh
 standalone/manage_ports.sh

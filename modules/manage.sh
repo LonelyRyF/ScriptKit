@@ -113,3 +113,4 @@ add_action "manage_failed_services" "查看失败服务" "manage" "manage_failed
 add_action "manage_service_logs" "查看服务日志" "manage" "manage_service_logs"
 add_script "manage_hostname" "主机名管理" "manage" "modules/standalone/manage_hostname.sh"
 add_script "manage_services" "Systemd 服务管理" "manage" "modules/standalone/manage_services.sh"
+add_script "manage_linux_mirrors" "LinuxMirrors 换源" "manage" "modules/standalone/change_linux_mirrors.sh"
