@@ -6,6 +6,27 @@ source "${SCRIPT_SELF_DIR}/../lib.sh"
 
 NAPCAT_INSTALLER_URL="https://nclatest.znin.net/NapNeko/NapCat-Installer/main/script/install.sh"
 
+NAPCAT_GITHUB_PROXIES=(
+    "https://ghfast.top"
+    "https://git.yylx.win/"
+    "https://gh-proxy.com"
+    "https://ghfile.geekertao.top"
+    "https://gh-proxy.net"
+    "https://j.1win.ggff.net"
+    "https://ghm.078465.xyz"
+    "https://gitproxy.127731.xyz"
+    "https://jiashu.1win.eu.org"
+    "https://github.tbedu.top"
+)
+
+NAPCAT_DOCKER_PROXIES=(
+    "docker.1ms.run"
+    "docker.xuanyuan.me"
+    "docker.mybacc.com"
+    "dytt.online"
+    "lispy.org"
+)
+
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
@@ -42,27 +63,105 @@ prompt_input() {
     fi
 }
 
-select_proxy_value() {
+describe_github_proxy_value() {
+    local proxy_value="${1:-}"
+    local index=0
+
+    case "$proxy_value" in
+        "")
+            printf '自动测速'
+            ;;
+        0)
+            printf '直连 GitHub 官方源'
+            ;;
+        *)
+            if [[ "$proxy_value" =~ ^[0-9]+$ ]]; then
+                index=$((proxy_value - 1))
+                if [ "$index" -ge 0 ] && [ "$index" -lt "${#NAPCAT_GITHUB_PROXIES[@]}" ]; then
+                    printf '%s' "${NAPCAT_GITHUB_PROXIES[$index]}"
+                    return 0
+                fi
+            fi
+            printf '代理 %s' "$proxy_value"
+            ;;
+    esac
+}
+
+describe_docker_proxy_value() {
+    local proxy_value="${1:-}"
+    local index=0
+
+    case "$proxy_value" in
+        "")
+            printf '自动测速'
+            ;;
+        0)
+            printf '直连 Docker 官方源'
+            ;;
+        *)
+            if [[ "$proxy_value" =~ ^[0-9]+$ ]]; then
+                index=$((proxy_value - 1))
+                if [ "$index" -ge 0 ] && [ "$index" -lt "${#NAPCAT_DOCKER_PROXIES[@]}" ]; then
+                    printf '%s' "${NAPCAT_DOCKER_PROXIES[$index]}"
+                    return 0
+                fi
+            fi
+            printf '代理 %s' "$proxy_value"
+            ;;
+    esac
+}
+
+select_github_proxy_value() {
     local output_name="$1"
     local -n output_ref="$output_name"
-    local max_value="$2"
     local selected=0
     local i
     local -a menu_labels=(
-        "默认源"$'\n'"不传 --proxy，使用安装脚本默认下载源"
+        "自动测速"$'\n'"不传 --proxy，由安装脚本测速后自动选择最快 GitHub 线路"
+        "直连官方"$'\n'"传入 --proxy 0，不使用代理，直接访问 GitHub 官方源"
     )
 
-    for ((i = 0; i <= max_value; i++)); do
-        menu_labels+=("代理 ${i}"$'\n'"传入 --proxy ${i}")
+    for ((i = 0; i < ${#NAPCAT_GITHUB_PROXIES[@]}; i++)); do
+        menu_labels+=("代理 $((i + 1))"$'\n'"${NAPCAT_GITHUB_PROXIES[$i]}")
     done
 
-    if ! select_menu "选择下载代理" menu_labels selected 0; then
+    if ! select_menu "选择 GitHub 下载线路" menu_labels selected 0; then
         msg_info "已取消"
         return 1
     fi
 
     if [ "$selected" -eq 0 ]; then
         output_ref=""
+    elif [ "$selected" -eq 1 ]; then
+        output_ref="0"
+    else
+        output_ref="$((selected - 1))"
+    fi
+}
+
+select_docker_proxy_value() {
+    local output_name="$1"
+    local -n output_ref="$output_name"
+    local selected=0
+    local i
+    local -a menu_labels=(
+        "自动测速"$'\n'"不传 --proxy，由安装脚本测速后自动选择最快 Docker 镜像线路"
+        "直连官方"$'\n'"传入 --proxy 0，不使用代理，直接拉取官方镜像"
+    )
+
+    for ((i = 0; i < ${#NAPCAT_DOCKER_PROXIES[@]}; i++)); do
+        menu_labels+=("代理 $((i + 1))"$'\n'"${NAPCAT_DOCKER_PROXIES[$i]}")
+    done
+
+    if ! select_menu "选择 Docker 镜像线路" menu_labels selected 0; then
+        msg_info "已取消"
+        return 1
+    fi
+
+    if [ "$selected" -eq 0 ]; then
+        output_ref=""
+    elif [ "$selected" -eq 1 ]; then
+        output_ref="0"
     else
         output_ref="$((selected - 1))"
     fi
@@ -85,10 +184,10 @@ select_mode_value() {
     local output_name="$1"
     local -n output_ref="$output_name"
     local selected=0
-    local custom_mode=""
     local -a menu_labels=(
-        "ws"$'\n'"使用 Shell.md 示例中的默认模式"
-        "手动输入"$'\n'"如需其他模式，再手动输入"
+        "ws"$'\n'"WebSocket 模式"
+        "reverse_ws"$'\n'"反向 WebSocket 模式"
+        "reverse_http"$'\n'"反向 HTTP 模式"
     )
 
     if ! select_menu "选择运行模式" menu_labels selected 0; then
@@ -102,14 +201,12 @@ select_mode_value() {
             return 0
             ;;
         1)
-            while true; do
-                prompt_input custom_mode "运行模式"
-                if [[ "$custom_mode" =~ ^[A-Za-z0-9_-]+$ ]]; then
-                    output_ref="$custom_mode"
-                    return 0
-                fi
-                msg_warn "运行模式只能包含字母、数字、下划线或中划线。"
-            done
+            output_ref="reverse_ws"
+            return 0
+            ;;
+        2)
+            output_ref="reverse_http"
+            return 0
             ;;
     esac
 
@@ -158,23 +255,26 @@ run_general_install() {
     local cli_enabled="n"
     local force_reinstall="n"
     local proxy_value=""
+    local proxy_desc=""
     local -a installer_args=("--docker" "n")
 
     draw_title_bar "NapCat 通用安装"
     if yesno_select "安装 NapCat TUI-CLI？"; then
         cli_enabled="y"
     fi
-    select_proxy_value proxy_value 5 || return 0
+    select_github_proxy_value proxy_value || return 0
     if yesno_select "执行 Shell 强制重装？"; then
         force_reinstall="y"
     fi
+
+    proxy_desc="$(describe_github_proxy_value "$proxy_value")"
 
     installer_args+=("--cli" "$cli_enabled")
     [ -n "$proxy_value" ] && installer_args+=("--proxy" "$proxy_value")
     [ "$force_reinstall" = "y" ] && installer_args+=("--force")
 
     show_command_preview "${installer_args[@]}"
-    if ! yesno_select "确认执行 NapCat 通用安装？cli=${cli_enabled} proxy=${proxy_value:-default} force=${force_reinstall}" "y"; then
+    if ! yesno_select "确认执行 NapCat 通用安装？cli=${cli_enabled} 线路=${proxy_desc} force=${force_reinstall}" "y"; then
         msg_info "已取消"
         return 0
     fi
@@ -184,14 +284,16 @@ run_general_install() {
 
 run_visual_install() {
     local proxy_value=""
+    local proxy_desc=""
     local -a installer_args=("--tui")
 
     draw_title_bar "NapCat 可视化安装"
-    select_proxy_value proxy_value 5 || return 0
+    select_github_proxy_value proxy_value || return 0
+    proxy_desc="$(describe_github_proxy_value "$proxy_value")"
     [ -n "$proxy_value" ] && installer_args+=("--proxy" "$proxy_value")
 
     show_command_preview "${installer_args[@]}"
-    if ! yesno_select "确认执行 NapCat 可视化安装？proxy=${proxy_value:-default}" "y"; then
+    if ! yesno_select "确认执行 NapCat 可视化安装？线路=${proxy_desc}" "y"; then
         msg_info "已取消"
         return 0
     fi
@@ -203,19 +305,21 @@ run_docker_install() {
     local qq_number=""
     local mode_value=""
     local proxy_value=""
+    local proxy_desc=""
     local -a installer_args=("--docker" "y")
 
     draw_title_bar "NapCat Docker 安装"
     prompt_qq_value qq_number
     select_mode_value mode_value || return 0
-    select_proxy_value proxy_value 7 || return 0
+    select_docker_proxy_value proxy_value || return 0
+    proxy_desc="$(describe_docker_proxy_value "$proxy_value")"
 
     installer_args+=("--qq" "$qq_number" "--mode" "$mode_value")
     [ -n "$proxy_value" ] && installer_args+=("--proxy" "$proxy_value")
     installer_args+=("--confirm")
 
     show_command_preview "${installer_args[@]}"
-    if ! yesno_select "确认执行 NapCat Docker 安装？qq=${qq_number} mode=${mode_value} proxy=${proxy_value:-default}" "y"; then
+    if ! yesno_select "确认执行 NapCat Docker 安装？qq=${qq_number} mode=${mode_value} 线路=${proxy_desc}" "y"; then
         msg_info "已取消"
         return 0
     fi
