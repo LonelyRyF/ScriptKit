@@ -412,6 +412,14 @@ select_menu() {
         done <<< "$label"
     }
 
+    show_selected_result() {
+        local label="$1"
+        local first_line="${label%%$'\n'*}"
+        local summary_title="${title#选择 }"
+
+        printf '%b %s\n' "$(msg_prompt "已选" "${summary_title}: ")" "$first_line" >&2
+    }
+
     draw_menu() {
         tput cup 0 0 1>&2 2>/dev/null || true
         tput ed 1>&2 2>/dev/null || true
@@ -453,6 +461,7 @@ select_menu() {
         fi
 
         _selected=$((choice - 1))
+        show_selected_result "${_labels[$_selected]}"
         return 0
     fi
 
@@ -474,6 +483,7 @@ select_menu() {
             "")
                 _selected="$cursor"
                 cleanup_screen
+                show_selected_result "${_labels[$_selected]}"
                 trap - INT TERM
                 return 0
                 ;;
