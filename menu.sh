@@ -27,9 +27,16 @@ declare -A MENU_PARENTS=()
 declare -A ITEM_TITLES=()
 declare -A ITEM_TYPES=()
 declare -A ITEM_TARGETS=()
+declare -A ITEM_PARENTS=()
+declare -a MENU_WARNINGS=()
+declare -a LOADED_MODULES=()
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+record_menu_warning() {
+    MENU_WARNINGS+=("$1")
 }
 
 can_use_tput_menu() {
@@ -41,10 +48,15 @@ add_menu() {
     local title="$2"
     local parent="${3:-}"
 
+    if [ -n "${ITEM_TYPES[$id]:-}" ]; then
+        record_menu_warning "重复菜单项 ID: $id"
+    fi
+
     MENU_TITLES["$id"]="$title"
     ITEM_TITLES["$id"]="$title"
     ITEM_TYPES["$id"]="menu"
     ITEM_TARGETS["$id"]="$id"
+    ITEM_PARENTS["$id"]="$parent"
 
     if [ -n "$parent" ]; then
         MENU_CHILDREN["$parent"]="${MENU_CHILDREN[$parent]:-} $id"
@@ -58,9 +70,14 @@ add_action() {
     local parent="$3"
     local handler="$4"
 
+    if [ -n "${ITEM_TYPES[$id]:-}" ]; then
+        record_menu_warning "重复菜单项 ID: $id"
+    fi
+
     ITEM_TITLES["$id"]="$title"
     ITEM_TYPES["$id"]="action"
     ITEM_TARGETS["$id"]="$handler"
+    ITEM_PARENTS["$id"]="$parent"
     MENU_CHILDREN["$parent"]="${MENU_CHILDREN[$parent]:-} $id"
 }
 
@@ -70,15 +87,42 @@ add_script() {
     local parent="$3"
     local script_path="$4"
 
+    if [ -n "${ITEM_TYPES[$id]:-}" ]; then
+        record_menu_warning "重复菜单项 ID: $id"
+    fi
+
     ITEM_TITLES["$id"]="$title"
     ITEM_TYPES["$id"]="script"
     ITEM_TARGETS["$id"]="$script_path"
+    ITEM_PARENTS["$id"]="$parent"
     MENU_CHILDREN["$parent"]="${MENU_CHILDREN[$parent]:-} $id"
 }
 
 pause_screen() {
     printf "\n%s" "按 Enter 返回菜单..."
     read -r _
+}
+
+yesno_select() {
+    local prompt="$1"
+    local default="${2:-n}"
+    local -a values=()
+
+    ITEM_TITLES["__yes"]="是"
+    ITEM_TYPES["__yes"]="choice"
+    ITEM_TARGETS["__yes"]=""
+    ITEM_TITLES["__no"]="否"
+    ITEM_TYPES["__no"]="choice"
+    ITEM_TARGETS["__no"]=""
+
+    if [ "$default" = "y" ]; then
+        values=("__yes" "__no")
+    else
+        values=("__no" "__yes")
+    fi
+
+    select_list "$prompt" "${values[@]}"
+    [ "$SELECT_RESULT" = "__yes" ]
 }
 
 cleanup() {
@@ -97,6 +141,8 @@ format_item_label() {
         menu) printf '%b[+]%b %s' "$GREEN" "$PLAIN" "$title" ;;
         action) printf '%b[*]%b %s' "$YELLOW" "$PLAIN" "$title" ;;
         script) printf '%b[>]%b %s' "$YELLOW" "$PLAIN" "$title" ;;
+        choice) printf '%b[ ]%b %s' "$CYAN" "$PLAIN" "$title" ;;
+        empty) printf '%b[-]%b %s' "$YELLOW" "$PLAIN" "$title" ;;
         back) printf '%b[<]%b %s' "$CYAN" "$PLAIN" "$title" ;;
         exit) printf '%b[x]%b %s' "$RED" "$PLAIN" "$title" ;;
         *) printf '%s' "$title" ;;
@@ -112,6 +158,8 @@ format_item_tip() {
         menu) printf '回车进入%s菜单' "$title" ;;
         action) printf '回车执行%s' "$title" ;;
         script) printf '回车运行%s' "$title" ;;
+        choice) printf '回车选择%s' "$title" ;;
+        empty) printf '当前菜单暂无可用功能' ;;
         back) printf '回车返回上级菜单' ;;
         exit) printf '回车退出' ;;
         *) printf '回车确认' ;;
@@ -123,14 +171,49 @@ draw_title_bar() {
     printf "%b== %s ========================================%b\n\n" "$BOLD" "$title" "$PLAIN"
 }
 
+build_menu_path() {
+    local menu_id="$1"
+    local current="$menu_id"
+    local path=""
+    local title
+    local guard=0
+
+    while [ -n "$current" ] && [ "$guard" -lt 50 ]; do
+        title="${MENU_TITLES[$current]:-$current}"
+        if [ -n "$path" ]; then
+            path="$title / $path"
+        else
+            path="$title"
+        fi
+
+        [ "$current" = "$ROOT_MENU" ] && break
+        current="${MENU_PARENTS[$current]:-}"
+        guard=$((guard + 1))
+    done
+
+    printf '%s' "$path"
+}
+
+item_matches_filter() {
+    local id="$1"
+    local filter="$2"
+    local title="${ITEM_TITLES[$id]:-$id}"
+    local haystack="${title} ${id}"
+
+    [ -z "$filter" ] && return 0
+    [[ "${haystack,,}" == *"${filter,,}"* ]]
+}
+
 interactive_select_list() {
     SELECT_RESULT=""
     local title="$1"
     shift
-    local -a values=("$@")
+    local -a all_values=("$@")
+    local -a values=("${all_values[@]}")
     local selected=0
     local start=0
     local page_size
+    local filter_text=""
 
     update_page_size() {
         page_size=$(($(tput lines 2>/dev/null || printf '20') - 4))
@@ -146,11 +229,65 @@ interactive_select_list() {
         [ "$start" -lt 0 ] && start=0
     }
 
+    value_exists() {
+        local wanted="$1"
+        local value
+        for value in "${values[@]}"; do
+            [ "$value" = "$wanted" ] && return 0
+        done
+        return 1
+    }
+
+    apply_filter() {
+        local value type
+        local -a filtered=()
+        local -a fixed=()
+
+        if [ -z "$filter_text" ]; then
+            values=("${all_values[@]}")
+        else
+            for value in "${all_values[@]}"; do
+                type="${ITEM_TYPES[$value]:-}"
+                case "$type" in
+                    back | exit)
+                        fixed+=("$value")
+                        ;;
+                    *)
+                        if item_matches_filter "$value" "$filter_text"; then
+                            filtered+=("$value")
+                        fi
+                        ;;
+                esac
+            done
+
+            if [ "${#filtered[@]}" -eq 0 ]; then
+                ITEM_TITLES["__no_match"]="没有匹配结果"
+                ITEM_TYPES["__no_match"]="empty"
+                ITEM_TARGETS["__no_match"]=""
+                filtered+=("__no_match")
+            fi
+
+            values=("${filtered[@]}" "${fixed[@]}")
+        fi
+
+        if [ "$selected" -ge "${#values[@]}" ]; then
+            selected=$((${#values[@]} - 1))
+        fi
+        [ "$selected" -lt 0 ] && selected=0
+        keep_selection_visible
+    }
+
     read_key() {
-        local key
+        local key next
         IFS= read -rsn1 key
         if [[ "$key" == $'\x1b' ]]; then
-            IFS= read -rsn2 key
+            key=""
+            while IFS= read -rsn1 -t 0.05 next; do
+                key+="$next"
+                [ "$next" = "~" ] && break
+                [ "${#key}" -ge 5 ] && break
+            done
+            [ -z "$key" ] && key="ESC"
         fi
         printf '%s' "$key"
     }
@@ -177,7 +314,10 @@ interactive_select_list() {
         selected_id="${values[$selected]}"
         tip="$(format_item_tip "$selected_id")"
         printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN"
-        printf "%bEnter%b %s  %bMove%b Up/Down j/k  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b h  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        if [ -n "$filter_text" ]; then
+            printf "%bFilter%b %s  " "$YELLOW" "$PLAIN" "$filter_text"
+        fi
         printf "%bPowered by %b%s%b\n" "$ITALIC" "$CYAN" "rainyfall.dev" "$PLAIN"
 
     }
@@ -216,11 +356,41 @@ interactive_select_list() {
         printf "%b------------------------------------------------%b" "$BOLD" "$PLAIN"
         tput cup "$((footer_line + 1))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
-        printf "%bEnter%b %s  %bMove%b Up/Down j/k  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b h  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         tput cup "$((footer_line + 2))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
+        if [ -n "$filter_text" ]; then
+            printf "%bFilter%b %s  " "$YELLOW" "$PLAIN" "$filter_text"
+        fi
         printf "%bPowered by %b%s%b" "$ITALIC" "$CYAN" "rainyfall.dev" "$PLAIN"
 
+    }
+
+    draw_help() {
+        tput cup 0 0 2>/dev/null || true
+        tput ed 2>/dev/null || true
+        draw_title_bar "$title / 帮助"
+        printf 'Enter        进入菜单或执行当前项\n'
+        printf 'Up/Down j/k  上下移动\n'
+        printf 'PgUp/PgDn    上下翻页\n'
+        printf 'g/G          跳到顶部/底部\n'
+        printf 'h/Left/Bs    返回上级菜单\n'
+        printf '/            搜索当前菜单，空输入清除搜索\n'
+        printf 'Esc          清除当前搜索\n'
+        printf 'q            退出 ScriptKit\n'
+        printf '\n按任意键返回菜单...'
+        read_key >/dev/null
+    }
+
+    prompt_search() {
+        tput cnorm 2>/dev/null || true
+        printf '\n搜索关键词（空则显示全部）: '
+        IFS= read -r filter_text
+        selected=0
+        start=0
+        apply_filter
+        tput civis 2>/dev/null || true
+        draw_menu
     }
 
     redraw_changed_selection() {
@@ -262,6 +432,49 @@ interactive_select_list() {
                     [ "$selected" -ge $((start + page_size)) ] && start=$((start + 1))
                 fi
                 ;;
+            "[5~")
+                selected=$((selected - page_size))
+                [ "$selected" -lt 0 ] && selected=0
+                keep_selection_visible
+                ;;
+            "[6~")
+                selected=$((selected + page_size))
+                [ "$selected" -ge "${#values[@]}" ] && selected=$((${#values[@]} - 1))
+                keep_selection_visible
+                ;;
+            "[H" | "[1~" | "OH" | "g")
+                selected=0
+                start=0
+                ;;
+            "[F" | "[4~" | "OF" | "G")
+                selected=$((${#values[@]} - 1))
+                keep_selection_visible
+                ;;
+            "[D" | "h" | "H" | $'\x7f' | $'\b')
+                if value_exists "__back"; then
+                    SELECT_RESULT="__back"
+                    break
+                fi
+                ;;
+            "/")
+                prompt_search
+                continue
+                ;;
+            "?")
+                draw_help
+                draw_menu
+                continue
+                ;;
+            "ESC")
+                if [ -n "$filter_text" ]; then
+                    filter_text=""
+                    selected=0
+                    start=0
+                    apply_filter
+                    draw_menu
+                    continue
+                fi
+                ;;
             "")
                 SELECT_RESULT="${values[$selected]}"
                 break
@@ -289,24 +502,85 @@ plain_select_list() {
     SELECT_RESULT=""
     local title="$1"
     shift
-    local -a values=("$@")
+    local -a all_values=("$@")
+    local -a values=("${all_values[@]}")
     local input id i
+    local filter_text=""
+
+    value_exists() {
+        local wanted="$1"
+        local value
+        for value in "${values[@]}"; do
+            [ "$value" = "$wanted" ] && return 0
+        done
+        return 1
+    }
+
+    apply_filter() {
+        local value type
+        local -a filtered=()
+        local -a fixed=()
+
+        if [ -z "$filter_text" ]; then
+            values=("${all_values[@]}")
+            return
+        fi
+
+        for value in "${all_values[@]}"; do
+            type="${ITEM_TYPES[$value]:-}"
+            case "$type" in
+                back | exit)
+                    fixed+=("$value")
+                    ;;
+                *)
+                    if item_matches_filter "$value" "$filter_text"; then
+                        filtered+=("$value")
+                    fi
+                    ;;
+            esac
+        done
+
+        if [ "${#filtered[@]}" -eq 0 ]; then
+            ITEM_TITLES["__no_match"]="没有匹配结果"
+            ITEM_TYPES["__no_match"]="empty"
+            ITEM_TARGETS["__no_match"]=""
+            filtered+=("__no_match")
+        fi
+
+        values=("${filtered[@]}" "${fixed[@]}")
+    }
 
     while true; do
         clear 2>/dev/null || true
         draw_title_bar "$title"
+        if [ -n "$filter_text" ]; then
+            printf '%b当前搜索:%b %s\n\n' "$YELLOW" "$PLAIN" "$filter_text"
+        fi
         for ((i = 0; i < ${#values[@]}; i++)); do
             id="${values[$i]}"
             printf '    %02d  %b\n' "$((i + 1))" "$(format_item_label "$id")"
         done
         printf '\n%b------------------------------------------------%b\n' "$BOLD" "$PLAIN"
-        printf '输入数字并回车确认，输入 q 退出\n'
+        if value_exists "__back"; then
+            printf '输入数字并回车确认，输入 /关键词 搜索，输入 b 返回上级，输入 q 退出\n'
+        else
+            printf '输入数字并回车确认，输入 /关键词 搜索，输入 q 退出\n'
+        fi
         printf '%bPowered by %b%s%b\n\n' "$ITALIC" "$CYAN" "rainyfall.dev" "$PLAIN"
         printf '请选择 [1-%d]: ' "${#values[@]}"
         read -r input
         if [[ "$input" =~ ^[Qq]$ ]]; then
             SELECT_RESULT="__exit"
             return
+        fi
+        if [[ "$input" =~ ^[Bb]$ ]] && value_exists "__back"; then
+            SELECT_RESULT="__back"
+            return
+        fi
+        if [[ "$input" == /* ]]; then
+            filter_text="${input#/}"
+            apply_filter
+            continue
         fi
         if [[ "$input" =~ ^[0-9]+$ ]] && [ "$input" -ge 1 ] && [ "$input" -le "${#values[@]}" ]; then
             SELECT_RESULT="${values[$((input - 1))]}"
@@ -337,7 +611,7 @@ run_action() {
     pause_screen
 }
 
-run_script() {
+resolve_script_file() {
     local script_path="$1"
     local script_file
 
@@ -359,8 +633,20 @@ run_script() {
         fi
     fi
 
-    clear 2>/dev/null || true
     if [ -f "$script_file" ]; then
+        printf '%s' "$script_file"
+        return 0
+    fi
+
+    return 1
+}
+
+run_script() {
+    local script_path="$1"
+    local script_file=""
+
+    clear 2>/dev/null || true
+    if script_file="$(resolve_script_file "$script_path")"; then
         bash "$script_file"
     else
         printf "%b[ERROR]%b 脚本未找到: %s\n" "$RED" "$PLAIN" "$script_path"
@@ -424,6 +710,7 @@ load_modules() {
         for module in "$MODULE_DIR"/*.sh; do
             # Source modules register menus/actions by calling add_menu/add_action/add_script.
             source "$module"
+            LOADED_MODULES+=("$module")
             loaded="true"
         done
     fi
@@ -432,6 +719,7 @@ load_modules() {
         if download_remote_modules; then
             for module in "$MODULE_CACHE_DIR"/*.sh; do
                 source "$module"
+                LOADED_MODULES+=("$module")
                 loaded="true"
             done
         else
@@ -443,15 +731,177 @@ load_modules() {
     shopt -u nullglob
 }
 
+validate_menu_registry() {
+    local id type parent target
+
+    for id in "${!ITEM_TYPES[@]}"; do
+        case "$id" in
+            __*) continue ;;
+        esac
+
+        type="${ITEM_TYPES[$id]:-}"
+        parent="${ITEM_PARENTS[$id]:-}"
+        target="${ITEM_TARGETS[$id]:-}"
+
+        if [ -n "$parent" ] && [ -z "${MENU_TITLES[$parent]:-}" ]; then
+            record_menu_warning "菜单项 $id 的父菜单不存在: $parent"
+        fi
+
+        case "$type" in
+            action)
+                if [ -z "$target" ] || ! declare -F "$target" >/dev/null 2>&1; then
+                    record_menu_warning "菜单项 $id 的处理函数不存在: ${target:-<empty>}"
+                fi
+                ;;
+            script)
+                if [ -z "$target" ] || ! resolve_script_file "$target" >/dev/null 2>&1; then
+                    record_menu_warning "菜单项 $id 的脚本不存在: ${target:-<empty>}"
+                fi
+                ;;
+            menu)
+                ;;
+            *)
+                record_menu_warning "菜单项 $id 的类型未知: ${type:-<empty>}"
+                ;;
+        esac
+    done
+}
+
+show_scriptkit_status() {
+    local id type module warning
+    local menu_count=0
+    local action_count=0
+    local script_count=0
+
+    for id in "${!ITEM_TYPES[@]}"; do
+        case "$id" in
+            __*) continue ;;
+        esac
+        type="${ITEM_TYPES[$id]:-}"
+        case "$type" in
+            menu) menu_count=$((menu_count + 1)) ;;
+            action) action_count=$((action_count + 1)) ;;
+            script) script_count=$((script_count + 1)) ;;
+        esac
+    done
+
+    printf "%b== ScriptKit 状态 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    printf "脚本目录: %s\n" "$SCRIPT_DIR"
+    printf "本地模块目录: %s\n" "$MODULE_DIR"
+    printf "模块缓存目录: %s\n" "$MODULE_CACHE_DIR"
+    printf "远程模块地址: %s\n" "$MODULE_BASE_URL"
+    printf "远程清单地址: %s\n\n" "$MODULE_MANIFEST_URL"
+
+    printf "菜单: %d  动作: %d  脚本: %d\n\n" "$menu_count" "$action_count" "$script_count"
+
+    printf "%b已加载模块:%b\n" "$BOLD" "$PLAIN"
+    if [ "${#LOADED_MODULES[@]}" -eq 0 ]; then
+        printf "  无\n"
+    else
+        for module in "${LOADED_MODULES[@]}"; do
+            printf "  %s\n" "$module"
+        done
+    fi
+
+    printf "\n%b可用命令:%b\n" "$BOLD" "$PLAIN"
+    for id in tput curl wget; do
+        if command_exists "$id"; then
+            printf "  %s: yes\n" "$id"
+        else
+            printf "  %s: no\n" "$id"
+        fi
+    done
+
+    printf "\n%b注册检查:%b\n" "$BOLD" "$PLAIN"
+    if [ "${#MENU_WARNINGS[@]}" -eq 0 ]; then
+        printf "  %b未发现问题%b\n" "$GREEN" "$PLAIN"
+    else
+        for warning in "${MENU_WARNINGS[@]}"; do
+            printf "  %b[WARN]%b %s\n" "$YELLOW" "$PLAIN" "$warning"
+        done
+    fi
+}
+
+refresh_remote_module_cache() {
+    printf "%b== 刷新远程模块缓存 ========================================%b\n\n" "$BOLD" "$PLAIN"
+
+    if [ -z "$MODULE_BASE_URL" ] || [ -z "$MODULE_MANIFEST_URL" ]; then
+        printf "%b[ERROR]%b 未配置远程模块地址。\n" "$RED" "$PLAIN"
+        return 1
+    fi
+
+    printf "远程清单: %s\n" "$MODULE_MANIFEST_URL"
+    printf "缓存目录: %s\n\n" "$MODULE_CACHE_DIR"
+
+    if download_remote_modules; then
+        printf "%b[OK]%b 远程模块缓存已刷新。\n" "$GREEN" "$PLAIN"
+        printf "%b提示:%b 当前运行中的菜单不会自动重载，请重新启动 ScriptKit 后生效。\n" "$YELLOW" "$PLAIN"
+    else
+        printf "%b[ERROR]%b 远程模块缓存刷新失败。\n" "$RED" "$PLAIN"
+        return 1
+    fi
+}
+
+is_safe_cache_dir() {
+    local dir="$1"
+    local home="${HOME:-}"
+
+    case "$dir" in
+        "" | "/" | "." | "..") return 1 ;;
+    esac
+
+    if [ -n "$home" ] && { [ "$dir" = "$home" ] || [ "$dir" = "$home/" ]; }; then
+        return 1
+    fi
+
+    return 0
+}
+
+clear_module_cache() {
+    printf "%b== 清理模块缓存 ========================================%b\n\n" "$BOLD" "$PLAIN"
+    printf "缓存目录: %s\n\n" "$MODULE_CACHE_DIR"
+
+    if ! is_safe_cache_dir "$MODULE_CACHE_DIR"; then
+        printf "%b[ERROR]%b 缓存目录不安全，已拒绝清理。\n" "$RED" "$PLAIN"
+        return 1
+    fi
+
+    if [ ! -d "$MODULE_CACHE_DIR" ]; then
+        printf "%b[INFO]%b 缓存目录不存在，无需清理。\n" "$CYAN" "$PLAIN"
+        return 0
+    fi
+
+    if ! yesno_select "确认清理模块缓存？"; then
+        printf "%b[INFO]%b 已取消清理。\n" "$CYAN" "$PLAIN"
+        return 0
+    fi
+
+    if rm -rf -- "$MODULE_CACHE_DIR"; then
+        printf "%b[OK]%b 模块缓存已清理。\n" "$GREEN" "$PLAIN"
+    else
+        printf "%b[ERROR]%b 模块缓存清理失败。\n" "$RED" "$PLAIN"
+        return 1
+    fi
+}
+
 show_menu() {
     local menu_id="$1"
-    local title="${MENU_TITLES[$menu_id]:-$menu_id}"
+    local title
     local -a items=()
     local child selected type target
+
+    title="$(build_menu_path "$menu_id")"
 
     for child in ${MENU_CHILDREN[$menu_id]:-}; do
         items+=("$child")
     done
+
+    if [ "${#items[@]}" -eq 0 ]; then
+        ITEM_TITLES["__empty"]="暂无可用功能"
+        ITEM_TYPES["__empty"]="empty"
+        ITEM_TARGETS["__empty"]=""
+        items+=("__empty")
+    fi
 
     if [ "$menu_id" != "$ROOT_MENU" ]; then
         ITEM_TITLES["__back"]="返回"
@@ -504,11 +954,20 @@ define_menus() {
     add_menu "security" "安全工具" "main"
     add_menu "app" "应用部署" "main"
     add_menu "utility" "实用工具" "main"
+    add_menu "scriptkit" "ScriptKit 管理" "utility"
+    add_action "scriptkit_status" "查看运行状态" "scriptkit" "show_scriptkit_status"
+    add_action "scriptkit_refresh_modules" "刷新远程模块缓存" "scriptkit" "refresh_remote_module_cache"
+    add_action "scriptkit_clear_cache" "清理模块缓存" "scriptkit" "clear_module_cache"
 }
 
 main() {
     define_menus
     load_modules
+    validate_menu_registry
+    if [ "${#MENU_WARNINGS[@]}" -gt 0 ]; then
+        printf "%b[WARN]%b 菜单注册发现 %d 个问题，可在 ScriptKit 管理中查看。\n" "$YELLOW" "$PLAIN" "${#MENU_WARNINGS[@]}" >&2
+        sleep 2
+    fi
     run_menu
 }
 
