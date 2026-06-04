@@ -275,24 +275,27 @@ block_ports_firewall() {
 }
 
 main() {
-    local choice=""
+    local selected=0
+    local -a menu_labels=(
+        "查看所有监听端口"
+        "查看指定端口"
+        "停止占用指定端口的进程"
+        "使用防火墙封禁端口"
+        "退出"
+    )
 
     while true; do
-        printf "%b== 端口管理 ========================================%b\n\n" "$BOLD" "$PLAIN"
-        printf "  1) 查看所有监听端口\n"
-        printf "  2) 查看指定端口\n"
-        printf "  3) 停止占用指定端口的进程\n"
-        printf "  4) 使用防火墙封禁端口\n"
-        printf "  0) 退出\n\n"
-        printf '%b' "$(msg_prompt "输入" "请选择 [0-4]: ")"
-        read -r choice
+        if ! select_menu "端口管理" menu_labels selected 0; then
+            msg_info "已取消"
+            return 0
+        fi
 
-        case "$choice" in
-            1) list_ports ;;
-            2) lookup_ports ;;
-            3) terminate_port_processes ;;
-            4) block_ports_firewall ;;
-            0) return 0 ;;
+        case "$selected" in
+            0) list_ports ;;
+            1) lookup_ports ;;
+            2) terminate_port_processes ;;
+            3) block_ports_firewall ;;
+            4) return 0 ;;
             *) msg_warn "无效选择" ;;
         esac
 

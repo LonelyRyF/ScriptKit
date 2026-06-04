@@ -164,33 +164,35 @@ restore_latest_backup() {
 }
 
 main() {
-    local choice=""
+    local selected=0
+    local -a menu_labels=(
+        "应用 / 更新 Bash 优化"$'\n'"更新 ${TARGET_BASHRC} 中的 ScriptKit 托管配置"
+        "恢复最近备份"$'\n'"恢复最近一次 ${TARGET_BASHRC} 备份"
+        "退出"
+    )
 
     while true; do
-        printf "%b== 终端优化 ========================================%b\n\n" "$BOLD" "$PLAIN"
-        printf "目标文件: %s\n\n" "$TARGET_BASHRC"
-        printf "  1) 应用 / 更新 Bash 优化\n"
-        printf "  2) 恢复最近备份\n"
-        printf "  0) 退出\n\n"
-        printf '%b' "$(msg_prompt "输入" "请选择 [0-2]: ")"
-        read -r choice
+        if ! select_menu "终端优化" menu_labels selected 0; then
+            msg_info "已取消"
+            exit 0
+        fi
 
-        case "$choice" in
-            1)
+        case "$selected" in
+            0)
                 if yesno_select "确认更新当前用户的 ~/.bashrc 配置？" "y"; then
                     apply_setup || exit 1
                 else
                     msg_info "已取消"
                 fi
                 ;;
-            2)
+            1)
                 if yesno_select "确认恢复最近一次 ~/.bashrc 备份？"; then
                     restore_latest_backup || exit 1
                 else
                     msg_info "已取消"
                 fi
                 ;;
-            0)
+            2)
                 exit 0
                 ;;
             *)

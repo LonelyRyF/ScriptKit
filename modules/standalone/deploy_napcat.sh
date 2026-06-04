@@ -25,7 +25,8 @@ download_file() {
 }
 
 prompt_input() {
-    local -n result_ref=$1
+    local output_name="$1"
+    local -n output_ref="$output_name"
     local prompt="$2"
     local default="${3:-}"
 
@@ -35,57 +36,84 @@ prompt_input() {
         printf '%b' "$(msg_prompt "输入" "$prompt: ")"
     fi
 
-    read -r result_ref
-    if [ -n "$default" ] && [ -z "$result_ref" ]; then
-        result_ref="$default"
+    read -r output_ref
+    if [ -n "$default" ] && [ -z "$output_ref" ]; then
+        output_ref="$default"
     fi
 }
 
-prompt_proxy_value() {
-    local -n result_ref=$1
+select_proxy_value() {
+    local output_name="$1"
+    local -n output_ref="$output_name"
     local max_value="$2"
-    local input=""
+    local selected=0
+    local i
+    local -a menu_labels=(
+        "默认源"$'\n'"不传 --proxy，使用安装脚本默认下载源"
+    )
 
-    while true; do
-        printf '%b' "$(msg_prompt "输入" "下载代理序号 [0-${max_value}]（留空使用默认源）: ")"
-        read -r input
-
-        if [ -z "$input" ]; then
-            result_ref=""
-            return 0
-        fi
-
-        if [[ "$input" =~ ^[0-9]+$ ]] && [ "$input" -ge 0 ] && [ "$input" -le "$max_value" ]; then
-            result_ref="$input"
-            return 0
-        fi
-
-        msg_warn "请输入 0-${max_value} 之间的数字，或直接回车跳过。"
+    for ((i = 0; i <= max_value; i++)); do
+        menu_labels+=("代理 ${i}"$'\n'"传入 --proxy ${i}")
     done
+
+    if ! select_menu "选择下载代理" menu_labels selected 0; then
+        msg_info "已取消"
+        return 1
+    fi
+
+    if [ "$selected" -eq 0 ]; then
+        output_ref=""
+    else
+        output_ref="$((selected - 1))"
+    fi
 }
 
 prompt_qq_value() {
-    local -n result_ref=$1
+    local output_name="$1"
+    local -n output_ref="$output_name"
 
     while true; do
-        prompt_input result_ref "请输入 QQ 号"
-        if [[ "$result_ref" =~ ^[0-9]+$ ]]; then
+        prompt_input "$output_name" "请输入 QQ 号"
+        if [[ "$output_ref" =~ ^[0-9]+$ ]]; then
             return 0
         fi
         msg_warn "QQ 号只能是数字。"
     done
 }
 
-prompt_mode_value() {
-    local -n result_ref=$1
+select_mode_value() {
+    local output_name="$1"
+    local -n output_ref="$output_name"
+    local selected=0
+    local custom_mode=""
+    local -a menu_labels=(
+        "ws"$'\n'"使用 Shell.md 示例中的默认模式"
+        "手动输入"$'\n'"如需其他模式，再手动输入"
+    )
 
-    while true; do
-        prompt_input result_ref "运行模式" "ws"
-        if [[ "$result_ref" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    if ! select_menu "选择运行模式" menu_labels selected 0; then
+        msg_info "已取消"
+        return 1
+    fi
+
+    case "$selected" in
+        0)
+            output_ref="ws"
             return 0
-        fi
-        msg_warn "运行模式只能包含字母、数字、下划线或中划线。"
-    done
+            ;;
+        1)
+            while true; do
+                prompt_input custom_mode "运行模式"
+                if [[ "$custom_mode" =~ ^[A-Za-z0-9_-]+$ ]]; then
+                    output_ref="$custom_mode"
+                    return 0
+                fi
+                msg_warn "运行模式只能包含字母、数字、下划线或中划线。"
+            done
+            ;;
+    esac
+
+    return 1
 }
 
 show_command_preview() {
@@ -136,7 +164,7 @@ run_general_install() {
     if yesno_select "安装 NapCat TUI-CLI？"; then
         cli_enabled="y"
     fi
-    prompt_proxy_value proxy_value 5
+    select_proxy_value proxy_value 5 || return 0
     if yesno_select "执行 Shell 强制重装？"; then
         force_reinstall="y"
     fi
@@ -159,7 +187,7 @@ run_visual_install() {
     local -a installer_args=("--tui")
 
     draw_title_bar "NapCat 可视化安装"
-    prompt_proxy_value proxy_value 5
+    select_proxy_value proxy_value 5 || return 0
     [ -n "$proxy_value" ] && installer_args+=("--proxy" "$proxy_value")
 
     show_command_preview "${installer_args[@]}"
@@ -179,8 +207,8 @@ run_docker_install() {
 
     draw_title_bar "NapCat Docker 安装"
     prompt_qq_value qq_number
-    prompt_mode_value mode_value
-    prompt_proxy_value proxy_value 7
+    select_mode_value mode_value || return 0
+    select_proxy_value proxy_value 7 || return 0
 
     installer_args+=("--qq" "$qq_number" "--mode" "$mode_value")
     [ -n "$proxy_value" ] && installer_args+=("--proxy" "$proxy_value")
