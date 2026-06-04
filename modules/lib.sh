@@ -305,6 +305,10 @@ select_menu() {
     while true; do
         local key
         key="$(read_key)"
+        if [ "$key" = "-" ]; then
+            IFS= read -rsn1 next_key
+            [ "$next_key" = ">" ] && key=""
+        fi
         case "$key" in
             "[A")
                 [ "$selected" -gt 0 ] && selected=$((selected - 1))

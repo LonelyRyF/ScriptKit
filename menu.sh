@@ -452,6 +452,10 @@ interactive_select_list() {
         local old_selected="$selected"
         local old_start="$start"
         key=$(read_key)
+        if [ "$key" = "-" ]; then
+            IFS= read -rsn1 next_key
+            [ "$next_key" = ">" ] && key=""
+        fi
         case "$key" in
             "[A" | "w" | "W")
                 if [ "$selected" -gt 0 ]; then
