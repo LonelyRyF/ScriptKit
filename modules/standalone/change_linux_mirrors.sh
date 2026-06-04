@@ -48,7 +48,7 @@ select_source_url() {
     local -a menu_labels=()
 
     for ((i = 0; i < ${#LINUXMIRRORS_LABELS[@]}; i++)); do
-        menu_labels+=("${LINUXMIRRORS_LABELS[$i]}  ${LINUXMIRRORS_URLS[$i]}")
+        menu_labels+=("${LINUXMIRRORS_LABELS[$i]}"$'\n'"${LINUXMIRRORS_URLS[$i]}")
     done
 
     if ! select_menu "LinuxMirrors 换源" menu_labels selected 2; then

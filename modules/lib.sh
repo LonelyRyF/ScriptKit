@@ -224,7 +224,7 @@ select_menu() {
     local title="$1"
     local -n _labels=$2
     local -n _selected=$3
-    local selected="${4:-0}"
+    local cursor="${4:-0}"
     local count=${#_labels[@]}
     local i
 
@@ -233,8 +233,8 @@ select_menu() {
         return 1
     fi
 
-    if ! [[ "$selected" =~ ^[0-9]+$ ]] || [ "$selected" -lt 0 ] || [ "$selected" -ge "$count" ]; then
-        selected=0
+    if ! [[ "$cursor" =~ ^[0-9]+$ ]] || [ "$cursor" -lt 0 ] || [ "$cursor" -ge "$count" ]; then
+        cursor=0
     fi
 
     cleanup_screen() {
@@ -257,16 +257,38 @@ select_menu() {
         printf '%s' "$key"
     }
 
+    render_label_block() {
+        local first_prefix="$1"
+        local continuation_prefix="$2"
+        local highlight="$3"
+        local label="$4"
+        local line=""
+        local first_line="y"
+
+        while IFS= read -r line || [ -n "$line" ]; do
+            if [ "$first_line" = "y" ]; then
+                if [ "$highlight" = "y" ]; then
+                    printf '%b%b%s%b\n' "$first_prefix" "$BOLD" "$line" "$PLAIN" >&2
+                else
+                    printf '%b%s\n' "$first_prefix" "$line" >&2
+                fi
+                first_line="n"
+            else
+                printf '%b%s\n' "$continuation_prefix" "$line" >&2
+            fi
+        done <<< "$label"
+    }
+
     draw_menu() {
         tput cup 0 0 1>&2 2>/dev/null || true
         tput ed 1>&2 2>/dev/null || true
         draw_title_bar "$title" >&2
 
         for ((i = 0; i < count; i++)); do
-            if [ "$i" -eq "$selected" ]; then
-                printf "   %b%b>%b %b%s%b\n" "$BLUE" "$BOLD" "$PLAIN" "$BOLD" "${_labels[$i]}" "$PLAIN" >&2
+            if [ "$i" -eq "$cursor" ]; then
+                render_label_block "   ${BLUE}${BOLD}>${PLAIN} " "     " "y" "${_labels[$i]}"
             else
-                printf "     %s\n" "${_labels[$i]}" >&2
+                render_label_block "     " "     " "n" "${_labels[$i]}"
             fi
         done
 
@@ -277,17 +299,21 @@ select_menu() {
     # 无法使用 tput 时回退到普通输入
     if ! command -v tput &>/dev/null || ! [ -t 0 ] || ! [ -t 2 ] || ! tput cup 0 0 &>/dev/null 2>&1; then
         local choice=""
+        local plain_prefix=""
+        local plain_indent=""
 
         draw_title_bar "$title" >&2
         for ((i = 0; i < count; i++)); do
-            printf '  %d) %s\n' "$((i + 1))" "${_labels[$i]}" >&2
+            printf -v plain_prefix '  %d) ' "$((i + 1))"
+            printf -v plain_indent '%*s' "${#plain_prefix}" ''
+            render_label_block "$plain_prefix" "$plain_indent" "n" "${_labels[$i]}"
         done
-        printf '\n%b' "$(msg_prompt "输入" "请选择 [1-${count}]（默认 $((selected + 1))）: ")" >&2
+        printf '\n%b' "$(msg_prompt "输入" "请选择 [1-${count}]（默认 $((cursor + 1))）: ")" >&2
         read -r choice
         if [[ "$choice" =~ ^[Qq]$ ]]; then
             return 1
         fi
-        choice="${choice:-$((selected + 1))}"
+        choice="${choice:-$((cursor + 1))}"
         if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$count" ]; then
             msg_warn "输入无效" >&2
             return 1
@@ -307,13 +333,13 @@ select_menu() {
         key="$(read_key)"
         case "$key" in
             "[A")
-                [ "$selected" -gt 0 ] && selected=$((selected - 1))
+                [ "$cursor" -gt 0 ] && cursor=$((cursor - 1))
                 ;;
             "[B")
-                [ "$selected" -lt $((count - 1)) ] && selected=$((selected + 1))
+                [ "$cursor" -lt $((count - 1)) ] && cursor=$((cursor + 1))
                 ;;
             "")
-                _selected="$selected"
+                _selected="$cursor"
                 cleanup_screen
                 trap - INT TERM
                 return 0
