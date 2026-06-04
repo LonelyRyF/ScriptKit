@@ -189,7 +189,7 @@ do_add_pubkey() {
 }
 
 show_current_status() {
-    printf "%b--- 当前 SSH 配置 ---%b\n" "$BOLD" "$PLAIN"
+    printf "%b当前 SSH 配置:%b\n" "$BOLD" "$PLAIN"
     local pw_auth pub_auth root_login
     pw_auth=$(get_sshd_option "PasswordAuthentication")
     pub_auth=$(get_sshd_option "PubkeyAuthentication")
@@ -235,14 +235,6 @@ main() {
         msg_info "未选择任何操作，退出"
         exit 0
     fi
-
-    # 显示选中项
-    printf "\n%b已选择:%b\n" "$BOLD" "$PLAIN"
-    for ((i = 0; i < ${#menu_selected[@]}; i++)); do
-        if [ "${menu_selected[$i]}" = "1" ]; then
-            printf "  - %s\n" "${menu_labels[$i]}"
-        fi
-    done
 
     # 判断是否涉及 sshd_config 修改（选项 0-4）
     local need_config_change="n"
@@ -312,8 +304,8 @@ main() {
         fi
     fi
 
-    printf "\n%b操作完成！%b\n" "$GREEN" "$PLAIN"
-    printf "%b提示：请在新终端中测试连接，确认可用后再关闭当前会话！%b\n" "$YELLOW" "$PLAIN"
+    printf "\n%bSSH 登录方式修改完成！%b\n" "$GREEN" "$PLAIN"
+    printf "%b请在新终端测试连接，确认可用后再关闭当前会话。%b\n" "$YELLOW" "$PLAIN"
 }
 
 main

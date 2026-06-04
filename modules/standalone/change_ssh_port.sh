@@ -116,22 +116,6 @@ main() {
         fi
     fi
 
-    # 确认
-    local confirm_prompt="确认将 SSH 端口改为 $new_port"
-    if [ "$keep_old" = "y" ]; then
-        confirm_prompt="$confirm_prompt，并保留旧端口 $current_port"
-    else
-        confirm_prompt="$confirm_prompt，并移除旧端口 $current_port"
-    fi
-    if [ "$update_fw" = "y" ]; then
-        confirm_prompt="$confirm_prompt，同时更新 $fw_type 防火墙"
-    fi
-    confirm_prompt="$confirm_prompt？"
-    if ! yesno_select "$confirm_prompt"; then
-        msg_warn "操作已取消"
-        exit 0
-    fi
-
     # 备份（带轮转）
     local backup
     backup=$(backup_ssh_config) || exit 1
@@ -172,12 +156,12 @@ main() {
         exit 1
     fi
 
-    printf "\n%b操作完成！%b\n" "$GREEN" "$PLAIN"
+    printf "\n%bSSH 端口修改完成！%b\n" "$GREEN" "$PLAIN"
     printf "新 SSH 端口: %s\n" "$new_port"
     if [ "$keep_old" = "y" ]; then
         printf "旧端口 %s 仍在监听，确认新端口可连接后可手动移除\n" "$current_port"
     fi
-    printf "\n%b提示：请在新终端中测试连接，确认可用后再关闭当前会话！%b\n" "$YELLOW" "$PLAIN"
+    printf "%b请在新终端测试连接，确认可用后再关闭当前会话。%b\n" "$YELLOW" "$PLAIN"
 }
 
 main

@@ -77,14 +77,14 @@ add_script() {
 }
 
 pause_screen() {
-    printf "\n%s" "Press Enter to continue..."
+    printf "\n%s" "按 Enter 返回菜单..."
     read -r _
 }
 
 cleanup() {
     tput cnorm 2>/dev/null || true
     tput rmcup 2>/dev/null || true
-    printf "\n%bOperation canceled.%b\n" "$RED" "$PLAIN"
+    printf "\n%b操作已取消。%b\n" "$RED" "$PLAIN"
     exit 130
 }
 

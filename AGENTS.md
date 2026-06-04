@@ -38,6 +38,15 @@ No test framework exists. `bash -n` is the only automated check. Always run it b
 - Standalone scripts must not assume they are sourced — they run in a child `bash` process.
 - Source modules must not use `set -e` or `exit` at top level (they run inside the main process).
 
+## Interaction UX
+
+- Keep standalone script output continuous. Avoid decorative section headings like `--- 配置确认 ---` unless they show useful current state before an action.
+- Do not print redundant confirmation summary blocks after the user just entered those values. When a safety confirmation is still necessary, use one concise `yesno_select` prompt with key values inline.
+- Use `yesno_select` for every yes/no prompt. Do not hand-roll inline `> 是  否` prompts; the shared selector renders two option lines and writes the selected answer back to the original prompt line.
+- Avoid generic outro blocks such as `常用命令`, empty status dumps, or long post-run tips. End with a short success/failure result and only essential next action.
+- Reuse values generated during the same run instead of asking the user to paste them back into the script.
+- When a function is used in command substitution, keep stdout machine-readable and send human status messages to stderr.
+
 ## Registration API
 
 ```bash

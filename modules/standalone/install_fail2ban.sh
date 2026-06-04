@@ -94,17 +94,15 @@ main() {
     printf '\n'
 
     # --- 参数配置 ---
-    printf "配置 Fail2Ban SSH jail，以下参数可直接回车使用默认值。\n\n"
-
-    printf "封禁时长 bantime（默认 3600 秒，即 1 小时，-1 为永久）: "
+    printf "设置封禁时长 （默认 3600 秒，-1 为永久）: "
     read -r input_bantime
     local bantime="${input_bantime:-3600}"
 
-    printf "检测时间窗口 findtime（默认 600 秒）: "
+    printf "设置检测时间窗口（默认 600 秒）: "
     read -r input_findtime
     local findtime="${input_findtime:-600}"
 
-    printf "最大重试次数 maxretry（默认 5 次）: "
+    printf "设置最大重试次数（默认 5 次）: "
     read -r input_maxretry
     local maxretry="${input_maxretry:-5}"
 
@@ -127,11 +125,6 @@ main() {
         if yesno_select "检测到 nginx，是否启用 nginx 防护？"; then
             enable_nginx="y"
         fi
-    fi
-
-    if ! yesno_select "确认写入 SSH jail（端口 $ssh_port，maxretry $maxretry）并启动？"; then
-        msg_warn "操作已取消"
-        exit 0
     fi
 
     # 备份旧配置
@@ -190,8 +183,7 @@ main() {
         exit 1
     fi
 
-    printf "\n%b操作完成！%b\n" "$GREEN" "$PLAIN"
-    printf "Fail2Ban 已启用 sshd jail，SSH 端口: %s\n" "$ssh_port"
+    printf "\n%bFail2Ban 安装完成！%b\n" "$GREEN" "$PLAIN"
 }
 
 main
