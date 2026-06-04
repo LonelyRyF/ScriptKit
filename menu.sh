@@ -347,7 +347,7 @@ interactive_select_list() {
         selected_id="${values[$selected]}"
         tip="$(format_item_tip "$selected_id")"
         printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN"
-        printf "%bEnter ->%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b <-  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         if [ -n "$filter_text" ]; then
             printf "%bFilter%b %s  " "$YELLOW" "$PLAIN" "$filter_text"
         fi
@@ -389,7 +389,7 @@ interactive_select_list() {
         printf "%b------------------------------------------------%b" "$BOLD" "$PLAIN"
         tput cup "$((footer_line + 1))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
-        printf "%bEnter ->%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b <-  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         tput cup "$((footer_line + 2))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
         if [ -n "$filter_text" ]; then
@@ -403,7 +403,7 @@ interactive_select_list() {
         tput cup 0 0 2>/dev/null || true
         tput ed 2>/dev/null || true
         draw_title_bar "$title / 帮助"
-        printf 'Enter        进入菜单或执行当前项\n'
+        printf 'Enter/Right  进入菜单或执行当前项\n'
         printf 'Up/Down      上下移动\n'
         printf 'PgUp/PgDn    上下翻页\n'
         printf 'g/G          跳到顶部/底部\n'
@@ -452,10 +452,6 @@ interactive_select_list() {
         local old_selected="$selected"
         local old_start="$start"
         key=$(read_key)
-        if [ "$key" = "-" ]; then
-            IFS= read -rsn1 next_key
-            [ "$next_key" = ">" ] && key=""
-        fi
         case "$key" in
             "[A" | "w" | "W")
                 if [ "$selected" -gt 0 ]; then
@@ -512,7 +508,7 @@ interactive_select_list() {
                     continue
                 fi
                 ;;
-            "")
+            "[C" | "")
                 SELECT_RESULT="${values[$selected]}"
                 break
                 ;;
