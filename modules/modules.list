@@ -1,4 +1,8 @@
 # Source modules loaded by menu.sh
+system_info.sh
+network.sh
+manage.sh
+utility.sh
 security.sh
 
 # Shared library (sourced by standalone scripts)
