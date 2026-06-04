@@ -30,3 +30,4 @@ standalone/terminal_setup.sh
 standalone/reinstall_system.sh
 standalone/installnet.sh
 standalone/ecs_toolbox.sh
+standalone/test_toolbox.sh
