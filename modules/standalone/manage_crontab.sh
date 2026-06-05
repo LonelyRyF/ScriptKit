@@ -17,7 +17,32 @@ require_crontab() {
         return 0
     fi
 
-    msg_err "未找到 crontab 命令"
+    msg_warn "未找到 crontab 命令"
+    if ! yesno_select "是否自动安装 crontab？"; then
+        msg_err "已取消，crontab 命令不可用。"
+        return 1
+    fi
+
+    msg_info "正在安装 cron 服务..."
+    if command_exists apt-get; then
+        apt-get update -qq && apt-get install -y -qq cron 2>/dev/null
+    elif command_exists dnf; then
+        dnf install -y cronie 2>/dev/null
+    elif command_exists yum; then
+        yum install -y cronie 2>/dev/null
+    elif command_exists apk; then
+        apk add --no-cache dcron 2>/dev/null
+    else
+        msg_err "无法识别的包管理器，请手动安装 cron。"
+        return 1
+    fi
+
+    if command_exists crontab; then
+        msg_ok "crontab 已安装。"
+        return 0
+    fi
+
+    msg_err "crontab 安装失败。"
     return 1
 }
 
