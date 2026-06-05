@@ -18,6 +18,20 @@ Pure Bash interactive menu framework for Linux toolboxes. No external TUI depend
 - `load_modules` checks local `$MODULE_DIR` first; if empty, downloads from `$MODULE_BASE_URL` into `$MODULE_CACHE_DIR` (`~/.cache/scriptkit/modules`).
 - `SCRIPT_DIR` falls back to `$PWD` when run via `bash <(curl ...)`.
 
+## Current refactor direction
+
+- Recommended order: Phase 1 shared helper consolidation, Phase 2 menu-core split, Phase 3 ScriptKit admin extraction.
+- Phase 2 is a structural split only. Do not mix it with product behavior changes, reinstall workflow changes, or root menu ownership changes.
+- See `PHASE2_PREP.md` for the current function split map and migration order.
+
+## Layer ownership
+
+- `menu.sh` should keep only bootstrap concerns that must exist before runtime is loaded, plus temporary Phase 3/4 holdovers such as `define_menus` and ScriptKit admin actions.
+- `modules/menu_core.sh` should own registry state, `add_menu`/`add_action`/`add_script`, module loading, dispatch, path building, and registry validation.
+- `modules/menu_ui.sh` should own rendering and selection UX: label/tip formatting, filtering, interactive/plain selectors, help, and pause behavior.
+- Shared primitives already provided by `modules/runtime.sh` or `modules/lib.sh` must not be redefined in menu-layer files.
+- When Phase 2 introduces new sourced framework files under `modules/`, update `modules/modules.list` in the same change so remote bootstrap can still download them.
+
 ## Validation
 
 Run syntax check after any edit:
@@ -29,6 +43,8 @@ bash -n modules/standalone/example.sh
 ```
 
 No test framework exists. `bash -n` is the only automated check. Always run it before considering work done.
+
+If you touch the menu framework, also syntax-check every touched framework file. When they exist, include `modules/menu_core.sh` and `modules/menu_ui.sh`. Keep both the interactive selector path and the plain fallback path behaviorally aligned.
 
 ## Conventions
 

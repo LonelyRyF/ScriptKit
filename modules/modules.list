@@ -1,3 +1,7 @@
+# Framework files (sourced by menu.sh directly)
+menu_core.sh
+menu_ui.sh
+
 # Source modules loaded by menu.sh
 system_info.sh
 network.sh
