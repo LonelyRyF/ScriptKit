@@ -27,20 +27,6 @@ Pure Bash interactive menu framework for Linux toolboxes. No external TUI depend
 - Each top-level module registers its own parent menu (`add_menu "xxx" "标题" "main"`); `menu.sh` only registers `main`.
 - `SCRIPT_DIR` falls back to `$PWD` when run via `bash <(curl ...)`.
 
-## Refactor status
-
-Phases 1–9 complete. See individual phase docs in the project root.
-
-## Features
-
-- **No flicker**: alt screen buffer (`smcup`/`rmcup`) managed per-transition, not per-list.
-- **Download progress**: single-line stderr overlay during remote bootstrap.
-- **Smart caching**: SHA256-verified; unchanged modules skip download on subsequent runs.
-- **Batch verification**: `sha256sum -c` after all downloads, blocks on failure with `yesno_select`.
-- **Action logging**: execution history stored in `~/.local/share/scriptkit/history.log`.
-- **Global menu search**: `/` filter offers top-level menu search across the whole tree.
-- **Plain fallback**: terminals without `tput` support degrade to numbered list mode.
-
 ## Layer ownership
 
 - `menu.sh` should keep only bootstrap concerns that must exist before runtime is loaded.
