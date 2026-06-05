@@ -335,10 +335,23 @@ is_safe_module_path() {
 download_remote_modules() {
     local manifest_file="$MODULE_CACHE_DIR/modules.list"
     local module_path module_url module_file module_parent
+    local total=0 current=0
 
     [ -n "$MODULE_MANIFEST_URL" ] || return 1
     mkdir -p "$MODULE_CACHE_DIR" || return 1
-    download_file "$MODULE_MANIFEST_URL" "$manifest_file" || return 1
+
+    printf '\r\033[K  正在获取模块清单 ...' >&2
+    download_file "$MODULE_MANIFEST_URL" "$manifest_file" || { printf '\r\033[K' >&2; return 1; }
+    printf '\r\033[K' >&2
+
+    while IFS= read -r module_path || [ -n "$module_path" ]; do
+        module_path="${module_path%%#*}"
+        module_path="${module_path//$'\r'/}"
+        module_path="${module_path#${module_path%%[![:space:]]*}}"
+        module_path="${module_path%${module_path##*[![:space:]]}}"
+        is_safe_module_path "$module_path" || continue
+        total=$((total + 1))
+    done <"$manifest_file"
 
     while IFS= read -r module_path || [ -n "$module_path" ]; do
         module_path="${module_path%%#*}"
@@ -348,12 +361,17 @@ download_remote_modules() {
 
         is_safe_module_path "$module_path" || continue
 
+        current=$((current + 1))
+        printf '\r\033[K  正在下载模块 [%d/%d] %s ...' "$current" "$total" "$module_path" >&2
+
         module_url="${MODULE_BASE_URL%/}/$module_path"
         module_file="$MODULE_CACHE_DIR/$module_path"
         module_parent="$(dirname -- "$module_file")"
         mkdir -p "$module_parent" || return 1
         download_file "$module_url" "$module_file" || return 1
     done <"$manifest_file"
+
+    printf '\r\033[K' >&2
 }
 
 should_source_module_file() {

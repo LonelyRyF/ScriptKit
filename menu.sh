@@ -28,6 +28,7 @@ bootstrap_download_file() {
 
 bootstrap_source() {
     local rel_path="$1"
+    local label="${2:-$rel_path}"
     local local_path="$MODULE_DIR/$rel_path"
     local cache_path="$MODULE_CACHE_DIR/$rel_path"
     local url="${MODULE_BASE_URL%/}/$rel_path"
@@ -40,8 +41,10 @@ bootstrap_source() {
         source "$cache_path"
         return 0
     fi
+    printf '\r\033[K  正在下载 %s ...' "$label" >&2
     mkdir -p "$MODULE_CACHE_DIR" 2>/dev/null
-    bootstrap_download_file "$url" "$cache_path" || return 1
+    bootstrap_download_file "$url" "$cache_path" || { printf '\r\033[K' >&2; return 1; }
+    printf '\r\033[K' >&2
     source "$cache_path"
 }
 
