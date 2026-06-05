@@ -2,6 +2,7 @@
 system_info.sh
 network.sh
 manage.sh
+proxy.sh
 app.sh
 utility.sh
 security.sh
@@ -20,6 +21,7 @@ standalone/rollback_ssh_config.sh
 standalone/install_fail2ban.sh
 standalone/change_linux_mirrors.sh
 standalone/deploy_napcat.sh
+standalone/proxy_toolbox.sh
 standalone/manage_crontab.sh
 standalone/manage_hostname.sh
 standalone/manage_ports.sh
