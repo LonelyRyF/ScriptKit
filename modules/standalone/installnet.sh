@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-# Interactive wrapper for leitbogioro/InstallNET.sh.
+# Interactive wrapper for remote InstallNET.sh.
 
 SCRIPT_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_SELF_DIR}/../lib.sh"
@@ -14,7 +14,8 @@ ARCH_FLAG=""
 PASSWORD="LeitboGi0ro"
 SSH_PORT="22"
 MIRROR=""
-WINDOWS_URL=""
+IMAGE_URL=""
+WINDOWS_LANG=""
 IP4_ADDR=""
 IP4_MASK=""
 IP4_GATE=""
@@ -40,33 +41,10 @@ handle_interrupt() {
 trap cleanup_temp EXIT
 trap handle_interrupt INT TERM
 
-validate_port() {
-    local port="$1"
-    [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
-}
-
-pick_from_options() {
-    local title="$1"
-    shift
-    local selected=0
-    local -a options=("$@")
-
-    select_menu "$(scriptkit_step_title "$title")" options selected || return 1
-    printf '%s' "${options[$selected]}"
-}
-
-ensure_download_tool() {
-    if command_exists curl || command_exists wget; then
-        return 0
-    fi
-
-    ensure_commands curl || ensure_commands wget
-}
-
 select_system() {
     local -a systems=(
-        "ubuntu" "debian" "centos" "alpine" "kali"
-        "almalinux" "rockylinux" "fedora" "windows"
+        "ubuntu" "debian" "kali" "alpine" "centos"
+        "rockylinux" "almalinux" "fedora" "windows" "dd" "netboot.xyz"
     )
 
     SYSTEM="$(pick_from_options "选择要安装的系统" "${systems[@]}")" || exit 0
@@ -77,39 +55,55 @@ select_version() {
     local -a options=()
     declare -A versions=(
         [ubuntu]="24.04 22.04 20.04"
-        [debian]="12 11 10 9 8 7"
+        [debian]="13 12 11 10 9 8 7"
         [centos]="10 9 8 7"
-        [alpine]="edge 3.21 3.20 3.19 3.18"
+        [alpine]="edge 3.22 3.21 3.20 3.19 3.18 3.17 3.16"
         [kali]="rolling"
-        [almalinux]="9 8"
-        [rockylinux]="9 8"
-        [fedora]="39 38"
+        [almalinux]="10 9 8"
+        [rockylinux]="10 9 8"
+        [fedora]="43 42 41 40 39 38"
         [windows]="2022 2019 2016 2012 11 10"
     )
 
     [ -n "${versions[$SYSTEM]:-}" ] || return 0
-    read -r -a options <<< "${versions[$SYSTEM]}"
-    options+=("手动输入" "跳过")
 
-    choice="$(pick_from_options "选择 ${SYSTEM} 版本" "${options[@]}")" || exit 0
-    case "$choice" in
-        手动输入)
-            printf '%b' "$(msg_prompt "输入" "请输入版本号（留空则跳过）: ")"
-            read -r VERSION
-            ;;
-        跳过)
-            VERSION=""
-            ;;
-        *)
-            VERSION="$choice"
-            ;;
-    esac
+    while true; do
+        read -r -a options <<< "${versions[$SYSTEM]}"
+        options+=("手动输入")
+
+        choice="$(pick_from_options "选择 ${SYSTEM} 版本" "${options[@]}")" || exit 0
+        case "$choice" in
+            手动输入)
+                printf '%b' "$(msg_prompt "输入" "请输入版本号（不可留空）: ")"
+                read -r VERSION
+                VERSION="${VERSION:-}"
+                if [ -n "$VERSION" ]; then
+                    return 0
+                fi
+                msg_warn "版本不能为空。"
+                ;;
+            *)
+                VERSION="$choice"
+                return 0
+                ;;
+        esac
+    done
+}
+
+require_version() {
+    if [ -n "$VERSION" ]; then
+        return 0
+    fi
+
+    msg_err "系统 $SYSTEM 需要指定版本。"
+    exit 1
 }
 
 select_arch() {
     local choice=""
 
     [ "$SYSTEM" = "windows" ] && return 0
+    [ "$SYSTEM" = "netboot.xyz" ] && return 0
     choice="$(pick_from_options "选择架构" "自动检测" "64-bit" "32-bit" "arm64")" || exit 0
     case "$choice" in
         64-bit) ARCH_FLAG="64" ;;
@@ -120,6 +114,8 @@ select_arch() {
 }
 
 collect_auth_inputs() {
+    [ "$SYSTEM" = "netboot.xyz" ] && return 0
+
     printf '%b' "$(msg_prompt "输入" "root 密码（留空默认 LeitboGi0ro）: ")"
     read -rs PASSWORD
     printf '\n'
@@ -138,15 +134,25 @@ collect_auth_inputs() {
 }
 
 collect_source_inputs() {
-    if [ "$SYSTEM" = "windows" ]; then
-        printf '%b' "$(msg_prompt "输入" "Windows 镜像 URL: ")"
-        read -r WINDOWS_URL
-        [ -n "$WINDOWS_URL" ] || {
-            msg_err "Windows 模式必须提供镜像 URL"
-            exit 1
-        }
-        return 0
-    fi
+    case "$SYSTEM" in
+        windows)
+            printf '%b' "$(msg_prompt "输入" "Windows 语言（en/zh/jp，留空默认 en）: ")"
+            read -r WINDOWS_LANG
+            return 0
+            ;;
+        dd)
+            printf '%b' "$(msg_prompt "输入" "自定义镜像 URL: ")"
+            read -r IMAGE_URL
+            [ -n "$IMAGE_URL" ] || {
+                msg_err "DD 模式必须提供镜像 URL"
+                exit 1
+            }
+            return 0
+            ;;
+        netboot.xyz)
+            return 0
+            ;;
+    esac
 
     printf '%b' "$(msg_prompt "输入" "自定义镜像源（留空使用默认）: ")"
     read -r MIRROR
@@ -185,16 +191,54 @@ collect_network_inputs() {
 build_command_args() {
     COMMAND_ARGS=()
 
-    if [ "$SYSTEM" = "windows" ]; then
-        COMMAND_ARGS=(-dd "$WINDOWS_URL")
-    else
-        COMMAND_ARGS=("-$SYSTEM")
-        [ -n "$VERSION" ] && COMMAND_ARGS+=("$VERSION")
-        [ -n "$ARCH_FLAG" ] && COMMAND_ARGS+=(-v "$ARCH_FLAG")
-    fi
+    case "$SYSTEM" in
+        ubuntu)
+            require_version
+            COMMAND_ARGS=(-ubuntu "$VERSION")
+            ;;
+        debian)
+            require_version
+            COMMAND_ARGS=(-debian "$VERSION")
+            ;;
+        kali)
+            require_version
+            COMMAND_ARGS=(-kali "$VERSION")
+            ;;
+        alpine)
+            require_version
+            COMMAND_ARGS=(-alpine "$VERSION")
+            ;;
+        centos)
+            require_version
+            COMMAND_ARGS=(-centos "$VERSION")
+            ;;
+        rockylinux)
+            require_version
+            COMMAND_ARGS=(-rockylinux "$VERSION")
+            ;;
+        almalinux)
+            require_version
+            COMMAND_ARGS=(-almalinux "$VERSION")
+            ;;
+        fedora)
+            require_version
+            COMMAND_ARGS=(-fedora "$VERSION")
+            ;;
+        windows)
+            require_version
+            COMMAND_ARGS=(-windows "$VERSION")
+            [ -n "$WINDOWS_LANG" ] && COMMAND_ARGS+=(-lang "$WINDOWS_LANG")
+            ;;
+        dd) COMMAND_ARGS=(-dd "$IMAGE_URL") ;;
+        netboot.xyz) COMMAND_ARGS=(-netbootxyz) ;;
+    esac
 
-    COMMAND_ARGS+=(-pwd "$PASSWORD" -port "$SSH_PORT")
-    [ -n "$MIRROR" ] && COMMAND_ARGS+=(--mirror "$MIRROR")
+    [ -n "$ARCH_FLAG" ] && COMMAND_ARGS+=(-architecture "$ARCH_FLAG")
+
+    if [ "$SYSTEM" != "netboot.xyz" ]; then
+        COMMAND_ARGS+=(-pwd "$PASSWORD" -port "$SSH_PORT")
+    fi
+    [ -n "$MIRROR" ] && COMMAND_ARGS+=(-mirror "$MIRROR")
 
     if [ -n "$IP4_ADDR" ]; then
         COMMAND_ARGS+=(--ip-addr "$IP4_ADDR" --ip-mask "$IP4_MASK" --ip-gate "$IP4_GATE" --ip-dns "$IP4_DNS")
@@ -213,10 +257,11 @@ print_summary() {
     printf "系统: %s\n" "$SYSTEM"
     [ -n "$VERSION" ] && printf "版本: %s\n" "$VERSION"
     [ -n "$ARCH_FLAG" ] && printf "架构: %s\n" "$ARCH_FLAG"
-    printf "SSH 端口: %s\n" "$SSH_PORT"
-    printf "密码: %s\n" "$PASSWORD"
+    [ "$SYSTEM" != "netboot.xyz" ] && printf "SSH 端口: %s\n" "$SSH_PORT"
+    [ "$SYSTEM" != "netboot.xyz" ] && printf "密码: %s\n" "$PASSWORD"
     [ -n "$MIRROR" ] && printf "镜像源: %s\n" "$MIRROR"
-    [ -n "$WINDOWS_URL" ] && printf "Windows 镜像: %s\n" "$WINDOWS_URL"
+    [ -n "$IMAGE_URL" ] && printf "自定义镜像: %s\n" "$IMAGE_URL"
+    [ -n "$WINDOWS_LANG" ] && printf "Windows 语言: %s\n" "$WINDOWS_LANG"
     [ -n "$IP4_ADDR" ] && printf "IPv4: %s / %s via %s  DNS=%s\n" "$IP4_ADDR" "$IP4_MASK" "$IP4_GATE" "$IP4_DNS"
     [ -n "$IP6_ADDR" ] && printf "IPv6: %s / %s via %s  DNS=%s\n" "$IP6_ADDR" "$IP6_MASK" "$IP6_GATE" "$IP6_DNS"
 
@@ -257,7 +302,7 @@ main() {
     draw_current_title "InstallNET 重装系统"
     msg_warn "这是高危操作，执行后会格式化系统盘并重装系统。"
     select_system
-    select_version
+    [ "$SYSTEM" != "dd" ] && [ "$SYSTEM" != "netboot.xyz" ] && select_version
     select_arch
     collect_auth_inputs
     collect_source_inputs

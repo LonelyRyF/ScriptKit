@@ -12,10 +12,6 @@ CRONTAB_OTHER_LINE_NUMBERS=()
 CRONTAB_OTHER_LINES=()
 BACKUP_FILES=()
 
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
 require_crontab() {
     if command_exists crontab; then
         return 0

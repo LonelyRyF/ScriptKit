@@ -6,15 +6,6 @@ set -u
 SCRIPT_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_SELF_DIR}/../lib.sh"
 
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-validate_port() {
-    local port="$1"
-    [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
-}
-
 normalize_ports() {
     local input="$1"
     local port=""

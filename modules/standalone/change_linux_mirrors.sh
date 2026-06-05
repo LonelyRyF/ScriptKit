@@ -24,24 +24,6 @@ LINUXMIRRORS_URLS=(
     "https://edgeone.linuxmirrors.cn/main.sh"
 )
 
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-download_file() {
-    local url="$1"
-    local output="$2"
-
-    if command_exists curl; then
-        curl -fsSL "$url" -o "$output"
-    elif command_exists wget; then
-        wget -qO "$output" "$url"
-    else
-        msg_err "需要 curl 或 wget 下载 LinuxMirrors 脚本"
-        return 1
-    fi
-}
-
 select_source_url() {
     local selected=2
     local i

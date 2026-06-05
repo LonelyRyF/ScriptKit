@@ -30,6 +30,11 @@ download_file() {
     fi
 }
 
+validate_port() {
+    local port="$1"
+    [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+}
+
 ui_label() {
     local color="$1"
     local label="$2"
@@ -59,6 +64,46 @@ ui_prompt() {
 draw_title_bar() {
     local title="$1"
     printf "%b== %s ========================================%b\n\n" "$BOLD" "$title" "$PLAIN"
+}
+
+scriptkit_terminal_columns() {
+    local cols=""
+
+    cols=$(tput cols 2>/dev/null || printf '80')
+    if ! [[ "$cols" =~ ^[0-9]+$ ]] || [ "$cols" -lt 1 ]; then
+        cols=80
+    fi
+
+    printf '%s' "$cols"
+}
+
+scriptkit_display_width() {
+    local text="${1:-}"
+    local width=0
+    local i=0
+    local char=""
+
+    for ((i = 0; i < ${#text}; i++)); do
+        char="${text:i:1}"
+        if [[ "$char" == [[:ascii:]] ]]; then
+            width=$((width + 1))
+        else
+            width=$((width + 2))
+        fi
+    done
+
+    printf '%s' "$width"
+}
+
+scriptkit_line_wraps() {
+    local text="$1"
+    local cols="${2:-0}"
+
+    if ! [[ "$cols" =~ ^[0-9]+$ ]] || [ "$cols" -lt 1 ]; then
+        cols=$(scriptkit_terminal_columns)
+    fi
+
+    [ "$(scriptkit_display_width "$text")" -gt "$cols" ]
 }
 
 scriptkit_current_title() {
@@ -394,4 +439,14 @@ select_menu() {
         esac
         draw_menu
     done
+}
+
+pick_from_options() {
+    local title="$1"
+    shift
+    local selected=0
+    local -a options=("$@")
+
+    select_menu "$(scriptkit_step_title "$title")" options selected || return 1
+    printf '%s' "${options[$selected]}"
 }

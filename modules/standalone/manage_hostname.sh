@@ -6,10 +6,6 @@ set -u
 SCRIPT_SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_SELF_DIR}/../lib.sh"
 
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
 validate_hostname() {
     local name="$1"
     local label=""

@@ -15,6 +15,8 @@ SSH_PORT="22"
 IMAGE_URL=""
 IMAGE_NAME=""
 ISO_URL=""
+LANG_CODE=""
+UBUNTU_MINIMAL="0"
 COMMAND_ARGS=()
 
 cleanup_temp() {
@@ -32,35 +34,12 @@ handle_interrupt() {
 trap cleanup_temp EXIT
 trap handle_interrupt INT TERM
 
-validate_port() {
-    local port="$1"
-    [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
-}
-
-pick_from_options() {
-    local title="$1"
-    shift
-    local selected=0
-    local -a options=("$@")
-
-    select_menu "$(scriptkit_step_title "$title")" options selected || return 1
-    printf '%s' "${options[$selected]}"
-}
-
-ensure_download_tool() {
-    if command_exists curl || command_exists wget; then
-        return 0
-    fi
-
-    ensure_commands curl || ensure_commands wget
-}
-
 select_system() {
     local -a systems=(
         "ubuntu" "debian" "centos" "alpine" "kali" "almalinux" "rocky"
         "arch" "fedora" "opensuse" "oracle" "redhat" "anolis"
-        "opencloudos" "nixos" "openeuler" "windows" "dd"
-        "alpine-live" "netboot.xyz"
+        "opencloudos" "nixos" "openeuler" "fnos" "gentoo" "aosc"
+        "windows" "dd" "alpine-live" "netboot.xyz"
     )
 
     SYSTEM="$(pick_from_options "选择安装模式或系统" "${systems[@]}")" || exit 0
@@ -70,20 +49,20 @@ select_version() {
     local choice=""
     local -a options=()
     declare -A versions=(
-        [ubuntu]="25.04 24.04 22.04 20.04 18.04 16.04"
-        [debian]="12 11 10 9"
+        [ubuntu]="26.04 24.04 22.04 20.04 18.04"
+        [debian]="13 12 11 10 9"
         [centos]="10 9"
-        [alpine]="3.21 3.20 3.19 3.18"
-        [fedora]="42 41"
-        [opensuse]="tumbleweed 15.6"
-        [almalinux]="9 8"
-        [rocky]="9 8"
-        [oracle]="9 8"
-        [redhat]="9 8"
+        [alpine]="3.23 3.22 3.21 3.20"
+        [fedora]="44 43"
+        [opensuse]="tumbleweed 16.0"
+        [almalinux]="10 9 8"
+        [rocky]="10 9 8"
+        [oracle]="10 9 8"
         [anolis]="23 8 7"
         [opencloudos]="23 9 8"
-        [nixos]="24.11"
-        [openeuler]="25.03 24.03 22.03 20.03"
+        [nixos]="25.11"
+        [openeuler]="24.03 22.03 20.03"
+        [fnos]="1"
     )
 
     [ -n "${versions[$SYSTEM]:-}" ] || return 0
@@ -115,6 +94,14 @@ collect_special_inputs() {
                 exit 1
             }
             ;;
+        redhat)
+            printf '%b' "$(msg_prompt "输入" "Red Hat qcow2 镜像地址: ")"
+            read -r IMAGE_URL
+            [ -n "$IMAGE_URL" ] || {
+                msg_err "Red Hat 模式必须提供 qcow2 镜像地址"
+                exit 1
+            }
+            ;;
         windows)
             printf '%b' "$(msg_prompt "输入" "Windows image-name（例如 Windows 11 Pro）: ")"
             read -r IMAGE_NAME
@@ -124,6 +111,13 @@ collect_special_inputs() {
             }
             printf '%b' "$(msg_prompt "输入" "ISO 下载地址（可留空）: ")"
             read -r ISO_URL
+            printf '%b' "$(msg_prompt "输入" "语言代码（如 zh-cn，留空默认自动）: ")"
+            read -r LANG_CODE
+            ;;
+        ubuntu)
+            if yesno_select "是否使用 Ubuntu minimal 镜像？"; then
+                UBUNTU_MINIMAL="1"
+            fi
             ;;
     esac
 }
@@ -165,14 +159,21 @@ build_command_args() {
         netboot.xyz)
             COMMAND_ARGS=("netboot.xyz")
             ;;
+        redhat)
+            COMMAND_ARGS=("redhat" "--img" "$IMAGE_URL" "--password" "$PASSWORD" "--ssh-port" "$SSH_PORT")
+            ;;
         windows)
             COMMAND_ARGS=("windows" "--image-name" "$IMAGE_NAME")
             [ -n "$ISO_URL" ] && COMMAND_ARGS+=("--iso" "$ISO_URL")
+            [ -n "$LANG_CODE" ] && COMMAND_ARGS+=("--lang" "$LANG_CODE")
             COMMAND_ARGS+=("--password" "$PASSWORD" "--ssh-port" "$SSH_PORT")
             ;;
         *)
             COMMAND_ARGS=("$SYSTEM")
             [ -n "$VERSION" ] && COMMAND_ARGS+=("$VERSION")
+            if [ "$SYSTEM" = "ubuntu" ] && [ "$UBUNTU_MINIMAL" = "1" ]; then
+                COMMAND_ARGS+=("--minimal")
+            fi
             COMMAND_ARGS+=("--password" "$PASSWORD" "--ssh-port" "$SSH_PORT")
             ;;
     esac
@@ -187,6 +188,8 @@ print_summary() {
     [ -n "$IMAGE_URL" ] && printf "镜像地址: %s\n" "$IMAGE_URL"
     [ -n "$IMAGE_NAME" ] && printf "Windows image-name: %s\n" "$IMAGE_NAME"
     [ -n "$ISO_URL" ] && printf "ISO 地址: %s\n" "$ISO_URL"
+    [ -n "$LANG_CODE" ] && printf "语言代码: %s\n" "$LANG_CODE"
+    [ "$SYSTEM" = "ubuntu" ] && [ "$UBUNTU_MINIMAL" = "1" ] && printf "Ubuntu 变体: minimal\n"
     case "$SYSTEM" in
         netboot.xyz) ;;
         *)
@@ -234,9 +237,14 @@ main() {
     select_system
 
     case "$SYSTEM" in
-        dd|windows) collect_special_inputs ;;
+        dd|windows|redhat|ubuntu) collect_special_inputs ;;
         alpine-live|netboot.xyz) ;;
         *) select_version ;;
+    esac
+
+    case "$SYSTEM" in
+        redhat) ;;
+        *) [ -n "$VERSION" ] || select_version ;;
     esac
 
     collect_login_inputs

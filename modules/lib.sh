@@ -146,6 +146,14 @@ ensure_commands() {
     done
 }
 
+ensure_download_tool() {
+    if command_exists curl || command_exists wget; then
+        return 0
+    fi
+
+    ensure_commands curl || ensure_commands wget
+}
+
 # --- 权限检查 ---
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then

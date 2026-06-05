@@ -12,10 +12,6 @@ SERVICE_ACTIVE=()
 SERVICE_ENABLED=()
 SERVICE_PATHS=()
 
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
 require_systemctl() {
     if command_exists systemctl; then
         return 0

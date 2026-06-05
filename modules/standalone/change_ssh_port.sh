@@ -51,18 +51,6 @@ update_firewall() {
     esac
 }
 
-# --- 端口验证 ---
-validate_port() {
-    local port="$1"
-    if ! [[ "$port" =~ ^[0-9]+$ ]]; then
-        return 1
-    fi
-    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
-        return 1
-    fi
-    return 0
-}
-
 get_current_port() {
     local port
     port=$(grep -E '^\s*Port\s+' "$SSHD_CONFIG" 2>/dev/null | awk '{print $2}' | head -n1)
