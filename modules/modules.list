@@ -4,7 +4,7 @@ menu_ui.sh
 
 # Source modules loaded by menu.sh
 system_info.sh
-test.sh
+bench.sh
 reinstall.sh
 manage.sh
 network.sh
@@ -13,7 +13,6 @@ app.sh
 utility.sh
 scriptkit_admin.sh
 proxy.sh
-ecs.sh
 
 # Shared library (sourced by standalone scripts)
 runtime.sh
