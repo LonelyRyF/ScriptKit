@@ -2,6 +2,8 @@
 
 # Read-only system management helpers.
 
+add_menu "manage" "系统管理" "main"
+
 manage_require_systemctl() {
     if command_exists systemctl; then
         return 0

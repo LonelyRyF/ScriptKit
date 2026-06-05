@@ -2,6 +2,8 @@
 
 # Read-only network diagnostics.
 
+add_menu "network" "网络工具" "main"
+
 network_public_ip_value() {
     local ip=""
 

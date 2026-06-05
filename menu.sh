@@ -82,14 +82,6 @@ fi
 
 define_menus() {
     add_menu "main" "主菜单"
-    add_menu "system" "系统信息" "main"
-    add_menu "test" "测试工具" "main"
-    add_menu "reinstall" "重装系统" "main"
-    add_menu "manage" "系统管理" "main"
-    add_menu "network" "网络工具" "main"
-    add_menu "security" "安全工具" "main"
-    add_menu "app" "应用部署" "main"
-    add_menu "utility" "实用工具" "main"
 }
 
 main() {

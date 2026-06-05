@@ -2,6 +2,8 @@
 
 # Test tools module.
 
+add_menu "test" "测试工具" "main"
+
 test_toolbox_run() {
     local tool="$1"
     local mode="$2"

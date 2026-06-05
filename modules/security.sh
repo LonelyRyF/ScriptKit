@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 # Security tools module - registers SSH hardening and Fail2Ban entries
-# Parent menu: "security" (defined in menu.sh define_menus)
+# Parent menu: "security"
+
+add_menu "security" "安全工具" "main"
 
 security_ssh_config_value() {
     local config="$1"

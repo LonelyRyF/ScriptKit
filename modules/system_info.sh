@@ -2,6 +2,8 @@
 
 # Read-only system information actions.
 
+add_menu "system" "系统信息" "main"
+
 system_info_os_name() {
     local os_name="unknown"
 

@@ -3,16 +3,16 @@ menu_core.sh
 menu_ui.sh
 
 # Source modules loaded by menu.sh
-scriptkit_admin.sh
 system_info.sh
-network.sh
-manage.sh
-proxy.sh
-app.sh
-utility.sh
-security.sh
 test.sh
 reinstall.sh
+manage.sh
+network.sh
+security.sh
+app.sh
+utility.sh
+scriptkit_admin.sh
+proxy.sh
 ecs.sh
 
 # Shared library (sourced by standalone scripts)

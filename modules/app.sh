@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+add_menu "app" "应用部署" "main"
+
 app_napcat_general_run() {
     run_standalone_with_env "modules/standalone/deploy_napcat.sh" "SCRIPTKIT_NAPCAT_MODE=general"
 }

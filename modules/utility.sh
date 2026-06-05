@@ -2,6 +2,8 @@
 
 # Small utility actions.
 
+add_menu "utility" "实用工具" "main"
+
 utility_random_password() {
     local length=""
     local password=""
