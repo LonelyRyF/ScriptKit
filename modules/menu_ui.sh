@@ -31,6 +31,8 @@ format_item_label() {
         menu) printf '%b[+]%b %s' "$GREEN" "$PLAIN" "$title" ;;
         action) printf '%b[*]%b %s' "$YELLOW" "$PLAIN" "$title" ;;
         script) printf '%b[>]%b %s' "$YELLOW" "$PLAIN" "$title" ;;
+        search) printf '%b[/]%b %s' "$CYAN" "$PLAIN" "$title" ;;
+        search_result) printf '%b[>]%b %s' "$YELLOW" "$PLAIN" "$title" ;;
         choice) printf '%b[ ]%b %s' "$CYAN" "$PLAIN" "$title" ;;
         empty) printf '%b[-]%b %s' "$YELLOW" "$PLAIN" "$title" ;;
         back) printf '%b[<]%b %s' "$CYAN" "$PLAIN" "$title" ;;
@@ -48,6 +50,8 @@ format_item_tip() {
         menu) printf '回车进入%s菜单' "$title" ;;
         action) printf '回车执行%s' "$title" ;;
         script) printf '回车运行%s' "$title" ;;
+        search) printf '回车全局搜索匹配菜单' ;;
+        search_result) printf '回车执行%s' "$title" ;;
         choice) printf '回车选择%s' "$title" ;;
         empty) printf '当前菜单暂无可用功能' ;;
         back) printf '回车返回上级菜单' ;;
@@ -122,7 +126,12 @@ interactive_select_list() {
                 esac
             done
 
-            if [ "${#filtered[@]}" -eq 0 ]; then
+            ITEM_TITLES["__global_search"]="全局搜索: $filter_text"
+            ITEM_TYPES["__global_search"]="search"
+            ITEM_TARGETS["__global_search"]="$filter_text"
+            filtered=("__global_search" "${filtered[@]}")
+
+            if [ "${#filtered[@]}" -eq 1 ]; then
                 ITEM_TITLES["__no_match"]="没有匹配结果"
                 ITEM_TYPES["__no_match"]="empty"
                 ITEM_TARGETS["__no_match"]=""
@@ -147,7 +156,7 @@ interactive_select_list() {
 
         width=$((width + $(scriptkit_display_width "$title")))
         case "$type" in
-            menu | action | script | choice | empty | back | exit)
+            menu | action | script | search | search_result | choice | empty | back | exit)
                 width=$((width + 4))
                 ;;
         esac
@@ -289,7 +298,7 @@ interactive_select_list() {
         printf 'PgUp/PgDn    上下翻页\n'
         printf 'g/G          跳到顶部/底部\n'
         printf 'Left/Bs      返回上级菜单\n'
-        printf '/            搜索当前菜单，空输入清除搜索\n'
+        printf '/            搜索当前菜单，并在顶部提供全局菜单搜索入口\n'
         printf 'Esc          清除当前搜索\n'
         printf 'q            退出 ScriptKit\n'
         printf '\n%b' "$(ui_prompt "提示" "按任意键返回菜单...")"
@@ -458,7 +467,12 @@ plain_select_list() {
             esac
         done
 
-        if [ "${#filtered[@]}" -eq 0 ]; then
+        ITEM_TITLES["__global_search"]="全局搜索: $filter_text"
+        ITEM_TYPES["__global_search"]="search"
+        ITEM_TARGETS["__global_search"]="$filter_text"
+        filtered=("__global_search" "${filtered[@]}")
+
+        if [ "${#filtered[@]}" -eq 1 ]; then
             ITEM_TITLES["__no_match"]="没有匹配结果"
             ITEM_TYPES["__no_match"]="empty"
             ITEM_TARGETS["__no_match"]=""
@@ -480,9 +494,9 @@ plain_select_list() {
         done
         printf '\n%b------------------------------------------------%b\n' "$BOLD" "$PLAIN"
         if value_exists "__back"; then
-            printf '输入数字并回车确认，输入 /关键词 搜索，输入 b 返回上级，输入 q 退出\n'
+            printf '输入数字并回车确认，输入 /关键词 搜索，顶部可全局菜单搜索，输入 b 返回上级，输入 q 退出\n'
         else
-            printf '输入数字并回车确认，输入 /关键词 搜索，输入 q 退出\n'
+            printf '输入数字并回车确认，输入 /关键词 搜索，顶部可全局菜单搜索，输入 q 退出\n'
         fi
         printf '%bPowered by %b%s%b\n\n' "$ITALIC" "$CYAN" "rainyfall.dev" "$PLAIN"
         printf '%b' "$(ui_prompt "输入" "请选择 [1-${#values[@]}]: ")"
