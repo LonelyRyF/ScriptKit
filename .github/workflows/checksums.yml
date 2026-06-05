@@ -1,0 +1,39 @@
+name: Regenerate Checksums
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**/*.sh'
+      - 'modules/**/*.list'
+      - 'menu.sh'
+
+jobs:
+  checksums:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate modules.sha256
+        run: |
+          cd modules
+          rm -f modules.sha256
+          for f in $(find . -name '*.sh' -o -name '*.list' | sed 's|^\./||' | sort); do
+            hash=$(sha256sum "$f" | cut -d' ' -f1)
+            printf '%s *%s\n' "$hash" "$f" >> modules.sha256
+          done
+          echo "Generated $(wc -l < modules.sha256) entries"
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add modules/modules.sha256
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: auto-regenerate modules.sha256"
+            git push
+          fi
