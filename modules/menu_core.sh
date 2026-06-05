@@ -232,6 +232,49 @@ download_remote_modules() {
     done <"$manifest_file"
 }
 
+should_source_module_file() {
+    local module_path="$1"
+    local name="$(basename -- "$module_path")"
+
+    case "$module_path" in
+        */*) return 1 ;;
+    esac
+
+    case "$name" in
+        lib.sh | runtime.sh | menu_core.sh | menu_ui.sh) return 1 ;;
+        *.sh) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+source_modules_from_manifest() {
+    local module_root="$1"
+    local manifest_file="$2"
+    local module_path module_file
+    local loaded="false"
+
+    [ -f "$manifest_file" ] || return 1
+
+    while IFS= read -r module_path || [ -n "$module_path" ]; do
+        module_path="${module_path%%#*}"
+        module_path="${module_path//$'\r'/}"
+        module_path="${module_path#${module_path%%[![:space:]]*}}"
+        module_path="${module_path%${module_path##*[![:space:]]}}"
+
+        is_safe_module_path "$module_path" || continue
+        should_source_module_file "$module_path" || continue
+
+        module_file="$module_root/$module_path"
+        [ -f "$module_file" ] || continue
+
+        source "$module_file"
+        LOADED_MODULES+=("$module_file")
+        loaded="true"
+    done <"$manifest_file"
+
+    [ "$loaded" = "true" ]
+}
+
 load_modules() {
     local module
     local name=""
@@ -240,20 +283,10 @@ load_modules() {
     shopt -s nullglob
 
     if [ -d "$MODULE_DIR" ]; then
-        for module in "$MODULE_DIR"/*.sh; do
-            name="$(basename -- "$module")"
-            case "$name" in
-                lib.sh | runtime.sh | menu_core.sh | menu_ui.sh) continue ;;
-            esac
-            source "$module"
-            LOADED_MODULES+=("$module")
+        if source_modules_from_manifest "$MODULE_DIR" "$MODULE_DIR/modules.list"; then
             loaded="true"
-        done
-    fi
-
-    if [ "$loaded" = "false" ] && [ -n "$MODULE_BASE_URL" ]; then
-        if download_remote_modules; then
-            for module in "$MODULE_CACHE_DIR"/*.sh; do
+        else
+            for module in "$MODULE_DIR"/*.sh; do
                 name="$(basename -- "$module")"
                 case "$name" in
                     lib.sh | runtime.sh | menu_core.sh | menu_ui.sh) continue ;;
@@ -262,6 +295,24 @@ load_modules() {
                 LOADED_MODULES+=("$module")
                 loaded="true"
             done
+        fi
+    fi
+
+    if [ "$loaded" = "false" ] && [ -n "$MODULE_BASE_URL" ]; then
+        if download_remote_modules; then
+            if source_modules_from_manifest "$MODULE_CACHE_DIR" "$MODULE_CACHE_DIR/modules.list"; then
+                loaded="true"
+            else
+                for module in "$MODULE_CACHE_DIR"/*.sh; do
+                    name="$(basename -- "$module")"
+                    case "$name" in
+                        lib.sh | runtime.sh | menu_core.sh | menu_ui.sh) continue ;;
+                    esac
+                    source "$module"
+                    LOADED_MODULES+=("$module")
+                    loaded="true"
+                done
+            fi
         else
             ui_warn "远程模块下载失败，菜单可能不完整。" >&2
             sleep 2
