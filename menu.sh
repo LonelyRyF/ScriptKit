@@ -45,27 +45,7 @@ bootstrap_source() {
     source "$cache_path"
 }
 
-load_runtime() {
-    local runtime_local="$MODULE_DIR/runtime.sh"
-    local runtime_cache="$MODULE_CACHE_DIR/runtime.sh"
-    local runtime_url="${MODULE_BASE_URL%/}/runtime.sh"
-
-    if [ -f "$runtime_local" ]; then
-        source "$runtime_local"
-        return 0
-    fi
-
-    if [ -f "$runtime_cache" ]; then
-        source "$runtime_cache"
-        return 0
-    fi
-
-    mkdir -p "$MODULE_CACHE_DIR" || return 1
-    bootstrap_download_file "$runtime_url" "$runtime_cache" || return 1
-    source "$runtime_cache"
-}
-
-if ! load_runtime; then
+if ! bootstrap_source "runtime.sh"; then
     printf '无法加载 ScriptKit runtime。\n' >&2
     exit 1
 fi
@@ -80,12 +60,8 @@ if ! bootstrap_source "menu_ui.sh"; then
     exit 1
 fi
 
-define_menus() {
-    add_menu "main" "主菜单"
-}
-
 main() {
-    define_menus
+    add_menu "main" "主菜单"
     load_modules
     validate_menu_registry
     if [ "${#MENU_WARNINGS[@]}" -gt 0 ]; then
