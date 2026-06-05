@@ -8,10 +8,11 @@ check:
 	@echo "All files OK"
 
 checksums:
+	@echo "GitHub Actions auto-regenerates modules.sha256 on push."
+	@echo "Only use this target if you need to generate checksums locally."
 	@cd modules && rm -f modules.sha256 && \
 	for f in $$(find . -name '*.sh' -o -name '*.list' | sed 's|^\./||' | sort); do \
 		h=$$(git show "HEAD:modules/$$f" | sha256sum | cut -d' ' -f1); \
 		printf '%s *%s\n' "$$h" "$$f" >> modules.sha256; \
 	done
-	@echo "Generated modules/modules.sha256 (from committed LF content)"
-	@echo "Note: commit your changes first, then run this to checksum the committed versions"
+	@echo "Generated modules/modules.sha256"
