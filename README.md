@@ -1,57 +1,41 @@
 # ScriptKit
 
-纯 Bash 原生交互式 Linux 工具箱菜单框架。
+我们不是脚本制造商，我们只是已有脚本的搬运工。
 
-## 特性
-
-- 纯 Bash + `tput`，无外部 TUI 依赖
-- 多层菜单，支持逐级返回
-- 低闪烁局部刷新，SSH 友好
-- 混合模块系统：source 模块 + 独立脚本
-- 无本地模块时自动从远程下载
-- 不支持 `tput` 时自动降级为数字输入模式
-
-## 快速开始
-
-本地运行：
-
-```bash
-bash menu.sh
-```
-
-网络运行：
+**一键运行**：
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/LonelyRyF/ScriptKit/main/menu.sh)
 ```
 
-## 项目结构
+## 环境变量
 
-```text
-menu.sh                  主菜单入口
-modules/
-  modules.list           远程模块清单
-  example.sh             示例 source 模块
-  standalone/
-    example.sh           示例独立脚本模块
-```
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `MODULE_DIR` | `$SCRIPT_DIR/modules` | 本地模块目录 |
+| `MODULE_CACHE_DIR` | `~/.cache/scriptkit/modules` | 远程模块缓存 |
+| `MODULE_BASE_URL` | GitHub raw /modules | 模块下载地址 |
+| `SCRIPTKIT_LOG_ENABLED` | `1` | 设为 `0` 禁用日志 |
 
 ## 模块开发
 
-在 `modules/` 下新建 `.sh` 文件，调用框架提供的注册函数：
+新建 `modules/my_feature.sh`：
 
 ```bash
-# modules/my_module.sh
-add_menu "my_menu" "我的工具" "main"
-add_action "my_action" "做点什么" "my_menu" "my_handler"
-add_script "my_script" "运行外部脚本" "my_menu" "modules/standalone/my_tool.sh"
+#!/usr/bin/env bash
 
-my_handler() {
-    echo "Hello from source module"
+add_menu "my_feature" "我的功能" "main"
+add_action "my_hello" "Hello" "my_feature" "do_hello"
+
+do_hello() {
+    scriptkit_draw_current_title "Hello"
+    ui_ok "Hello World!"
 }
 ```
 
-新模块会被主菜单自动加载，无需修改 `menu.sh`。
+在 `modules/modules.list` 的 Source modules 分组中添加一行 `my_feature.sh` 即可。
+
+详细规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
 
