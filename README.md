@@ -37,6 +37,24 @@ do_hello() {
 
 详细规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+## 关联项目
+
+ScriptKit 集成了以下开源工具（排名不分先后）：
+
+| 工具 | 说明 |
+|---|---|
+| [masonr/yet-another-bench-script](https://github.com/masonr/yet-another-bench-script) | UnixBench + Geekbench + 网络测速 |
+| [LloydAsp/NodeQuality](https://github.com/LloydAsp/NodeQuality) | VPS 综合测试（无痕模式） |
+| [xykt/IPQuality](https://github.com/xykt/IPQuality) | IP 质量体检 |
+| [lmc999/RegionRestrictionCheck](https://github.com/lmc999/RegionRestrictionCheck) | 流媒体解锁检测 |
+| [spiritLHLS/ecs](https://github.com/spiritLHLS/ecs) | VPS 融合怪测试 |
+| [leitbogioro/Tools](https://github.com/leitbogioro/Tools) | Linux 一键重装 |
+| [bin456789/reinstall](https://github.com/bin456789/reinstall) | 系统重装 |
+| [233boy/sing-box](https://github.com/233boy/sing-box) | Sing-box 一键管理 |
+| [fscarmen/sing-box](https://github.com/fscarmen/sing-box) | Sing-box 一键安装 |
+| [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) | 3x-ui 面板 |
+| [zywe03/realm-xwPF](https://github.com/zywe03/realm-xwPF) | Realm 全功能一键中转脚本 |
+
 ## 许可证
 
 [MIT](LICENSE)
