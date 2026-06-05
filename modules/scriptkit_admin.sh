@@ -208,12 +208,19 @@ install_scriptkit_system_wide() {
         return 1
     fi
 
-    printf "正在下载模块...\n"
+    local existing_cache="${XDG_CACHE_HOME:-${HOME:-.}/.cache}/scriptkit/modules"
     SCRIPTKIT_ORIG_MODULE_DIR="${MODULE_DIR:-}"
     SCRIPTKIT_ORIG_CACHE_DIR="${MODULE_CACHE_DIR:-}"
     MODULE_DIR="${install_dir}/modules"
     MODULE_CACHE_DIR="${install_dir}/modules"
     mkdir -p "${MODULE_DIR}" || { ui_error "无法创建模块目录。"; return 1; }
+
+    if [ -d "${existing_cache}" ] && [ "$(ls -A "${existing_cache}" 2>/dev/null)" ]; then
+        printf "正在复用已有缓存...\n"
+        cp -r "${existing_cache}/." "${MODULE_DIR}/" 2>/dev/null
+    fi
+
+    printf "正在同步模块...\n"
     download_remote_modules || { ui_error "下载模块失败。"; return 1; }
     MODULE_DIR="${SCRIPTKIT_ORIG_MODULE_DIR}"
     MODULE_CACHE_DIR="${SCRIPTKIT_ORIG_CACHE_DIR}"
