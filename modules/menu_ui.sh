@@ -421,7 +421,6 @@ interactive_select_list() {
     done
 
     tput cnorm 2>/dev/null || true
-    tput rmcup 2>/dev/null || true
     trap - INT TERM WINCH
 }
 

@@ -142,6 +142,7 @@ run_action() {
     local status=0
     local result="success"
 
+    tput rmcup 2>/dev/null || true
     clear 2>/dev/null || true
     SCRIPTKIT_CURRENT_MENU_PATH="$menu_path"
     SCRIPTKIT_CURRENT_ITEM_PATH="$item_path"
@@ -221,6 +222,7 @@ run_script() {
     local status=0
     local result="success"
 
+    tput rmcup 2>/dev/null || true
     clear 2>/dev/null || true
     if script_file="$(resolve_script_file "$script_path")"; then
         SCRIPTKIT_CURRENT_MENU_PATH="$menu_path" SCRIPTKIT_CURRENT_ITEM_PATH="$item_path" bash "$script_file"
@@ -526,6 +528,8 @@ show_menu() {
             CURRENT_MENU="${MENU_PARENTS[$menu_id]:-$ROOT_MENU}"
             ;;
         exit)
+            tput cnorm 2>/dev/null || true
+            tput rmcup 2>/dev/null || true
             clear 2>/dev/null || true
             exit 0
             ;;
