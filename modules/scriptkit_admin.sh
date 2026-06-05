@@ -8,6 +8,8 @@ add_action "scriptkit_view_log" "查看操作日志" "scriptkit" "show_action_lo
 add_action "scriptkit_clear_log" "清理操作日志" "scriptkit" "clear_action_log"
 add_action "scriptkit_refresh_modules" "刷新远程模块缓存" "scriptkit" "refresh_remote_module_cache"
 add_action "scriptkit_clear_cache" "清理模块缓存" "scriptkit" "clear_module_cache"
+add_action "scriptkit_install_system" "安装系统级 scriptkit 命令" "scriptkit" "install_scriptkit_system_wide"
+add_action "scriptkit_uninstall_system" "卸载系统级 scriptkit 命令" "scriptkit" "uninstall_scriptkit_system_wide"
 
 show_scriptkit_status() {
     local id type module warning
@@ -183,4 +185,93 @@ clear_module_cache() {
         ui_error "模块缓存清理失败。"
         return 1
     fi
+}
+
+install_scriptkit_system_wide() {
+    local install_dir="${HOME}/.local/share/scriptkit"
+    local wrapper_path="${install_dir}/scriptkit"
+    local bin_path="/usr/local/bin/scriptkit"
+
+    scriptkit_draw_current_title "安装系统级 scriptkit 命令"
+
+    ui_info "安装目录: ${install_dir}"
+    printf "\n"
+
+    mkdir -p "${install_dir}" 2>/dev/null || {
+        ui_error "无法创建安装目录。"
+        return 1
+    }
+
+    printf "正在下载 ScriptKit 到本地...\n"
+    if ! download_file "${SCRIPTKIT_RAW_BASE_URL}/menu.sh" "${install_dir}/menu.sh"; then
+        ui_error "下载 menu.sh 失败。"
+        return 1
+    fi
+
+    printf "正在下载模块...\n"
+    SCRIPTKIT_ORIG_MODULE_DIR="${MODULE_DIR:-}"
+    SCRIPTKIT_ORIG_CACHE_DIR="${MODULE_CACHE_DIR:-}"
+    MODULE_DIR="${install_dir}/modules"
+    MODULE_CACHE_DIR="${install_dir}/modules"
+    mkdir -p "${MODULE_DIR}" || { ui_error "无法创建模块目录。"; return 1; }
+    download_remote_modules || { ui_error "下载模块失败。"; return 1; }
+    MODULE_DIR="${SCRIPTKIT_ORIG_MODULE_DIR}"
+    MODULE_CACHE_DIR="${SCRIPTKIT_ORIG_CACHE_DIR}"
+
+    cat >"${wrapper_path}" <<'SCRIPTKIT_WRAPPER'
+#!/usr/bin/env bash
+INSTALL_DIR="${HOME}/.local/share/scriptkit"
+export SCRIPT_DIR="${INSTALL_DIR}"
+export MODULE_DIR="${INSTALL_DIR}/modules"
+export MODULE_CACHE_DIR="${INSTALL_DIR}/modules"
+exec bash "${INSTALL_DIR}/menu.sh" "$@"
+SCRIPTKIT_WRAPPER
+    chmod +x "${wrapper_path}"
+
+    if ! yesno_select "需要 sudo 权限写入 ${bin_path}，是否继续？"; then
+        ui_info "已取消安装。"
+        ui_info "你可以手动运行: ${wrapper_path}"
+        return 0
+    fi
+
+    if ! sudo ln -sf "${wrapper_path}" "${bin_path}" 2>/dev/null; then
+        ui_error "无法创建系统级命令，路径: ${bin_path}"
+        ui_info "你可以手动运行:"
+        printf "  sudo ln -sf %s %s\n" "${wrapper_path}" "${bin_path}"
+        return 1
+    fi
+
+    printf "\n"
+    ui_ok "安装完成！现在可以直接使用 scriptkit 命令"
+    ui_info "用法: scriptkit"
+}
+
+uninstall_scriptkit_system_wide() {
+    local install_dir="${HOME}/.local/share/scriptkit"
+    local bin_path="/usr/local/bin/scriptkit"
+
+    scriptkit_draw_current_title "卸载系统级 scriptkit 命令"
+
+    if ! yesno_select "确认卸载 scriptkit 命令？"; then
+        ui_info "已取消。"
+        return 0
+    fi
+
+    if [ -L "${bin_path}" ] || [ -f "${bin_path}" ]; then
+        printf "正在移除 %s ...\n" "${bin_path}"
+        if ! sudo rm -f "${bin_path}" 2>/dev/null; then
+            ui_warn "无法移除 ${bin_path}，请手动删除。"
+        fi
+    else
+        ui_info "${bin_path} 不存在，跳过。"
+    fi
+
+    if [ -d "${install_dir}" ]; then
+        printf "正在移除 %s ...\n" "${install_dir}"
+        rm -rf "${install_dir}" 2>/dev/null || {
+            ui_warn "无法移除 ${install_dir}，请手动删除。"
+        }
+    fi
+
+    ui_ok "卸载完成。"
 }
