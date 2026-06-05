@@ -1,0 +1,6 @@
+# Development artifacts
+test/
+*.swp
+*.swo
+*~
+.DS_Store

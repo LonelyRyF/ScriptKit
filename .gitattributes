@@ -1,0 +1,4 @@
+# Ensure shell scripts always use LF
+*.sh text eol=lf
+*.list text eol=lf
+*.md text eol=lf
