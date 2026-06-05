@@ -3,6 +3,7 @@ menu_core.sh
 menu_ui.sh
 
 # Source modules loaded by menu.sh
+scriptkit_admin.sh
 system_info.sh
 network.sh
 manage.sh
