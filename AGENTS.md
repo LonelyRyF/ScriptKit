@@ -6,31 +6,48 @@ Pure Bash interactive menu framework for Linux toolboxes. No external TUI depend
 
 ## Key files
 
-- `menu.sh` — main entry point; contains the menu engine, registration API, and demo handlers.
-- `modules/*.sh` — source modules auto-loaded by `load_modules`; they call `add_menu`/`add_action`/`add_script` to register entries.
-- `modules/standalone/*.sh` — independent scripts executed via `bash`; registered with `add_script`.
-- `modules/modules.list` — manifest of relative paths for remote download.
+- `menu.sh` — entry point (74 lines): bootstrap + `main()`
+- `modules/runtime.sh` — shared runtime: colors, UI helpers, selectors, key reader
+- `modules/menu_core.sh` — framework core: registry, module loading, dispatch, menu loop, SHA256 verification
+- `modules/menu_ui.sh` — framework UI: rendering, interactive/plain selectors, filtering
+- `modules/lib.sh` — standalone facade, `source`d by child-process scripts
+- `modules/*.sh` — source modules auto-loaded by `load_modules`; register via `add_menu`/`add_action`/`add_script`
+- `modules/standalone/*.sh` — independent scripts executed via `bash`; registered with `add_script`
+- `modules/modules.list` — manifest controlling load order and remote download
+- `modules/modules.sha256` — SHA256 checksums for integrity verification and smart caching
+- `CONTRIBUTING.md` — module development guide
 
 ## Architecture
 
 - Mixed module system: lightweight modules are `source`d (share variables/functions); heavy or risky modules run as separate `bash` processes.
 - Menu tree uses associative arrays: `MENU_TITLES`, `MENU_CHILDREN`, `MENU_PARENTS`, `ITEM_TYPES`, `ITEM_TARGETS`.
+- Loading order: `runtime.sh` → `menu_core.sh` → `menu_ui.sh` → `load_modules` (source 业务模块按 `modules.list` 顺序).
 - `load_modules` checks local `$MODULE_DIR` first; if empty, downloads from `$MODULE_BASE_URL` into `$MODULE_CACHE_DIR` (`~/.cache/scriptkit/modules`).
+- SHA256 checksums verify downloaded files; matching cached files are skipped for fast subsequent startups.
+- Each top-level module registers its own parent menu (`add_menu "xxx" "标题" "main"`); `menu.sh` only registers `main`.
 - `SCRIPT_DIR` falls back to `$PWD` when run via `bash <(curl ...)`.
 
-## Current refactor direction
+## Refactor status
 
-- Recommended order: Phase 1 shared helper consolidation, Phase 2 menu-core split, Phase 3 ScriptKit admin extraction.
-- Phase 2 is a structural split only. Do not mix it with product behavior changes, reinstall workflow changes, or root menu ownership changes.
-- See `PHASE2_PREP.md` for the current function split map and migration order.
+Phases 1–9 complete. See individual phase docs in the project root.
+
+## Features
+
+- **No flicker**: alt screen buffer (`smcup`/`rmcup`) managed per-transition, not per-list.
+- **Download progress**: single-line stderr overlay during remote bootstrap.
+- **Smart caching**: SHA256-verified; unchanged modules skip download on subsequent runs.
+- **Batch verification**: `sha256sum -c` after all downloads, blocks on failure with `yesno_select`.
+- **Action logging**: execution history stored in `~/.local/share/scriptkit/history.log`.
+- **Global menu search**: `/` filter offers top-level menu search across the whole tree.
+- **Plain fallback**: terminals without `tput` support degrade to numbered list mode.
 
 ## Layer ownership
 
-- `menu.sh` should keep only bootstrap concerns that must exist before runtime is loaded, plus temporary Phase 3/4 holdovers such as `define_menus` and ScriptKit admin actions.
+- `menu.sh` should keep only bootstrap concerns that must exist before runtime is loaded.
 - `modules/menu_core.sh` should own registry state, `add_menu`/`add_action`/`add_script`, module loading, dispatch, path building, and registry validation.
 - `modules/menu_ui.sh` should own rendering and selection UX: label/tip formatting, filtering, interactive/plain selectors, help, and pause behavior.
 - Shared primitives already provided by `modules/runtime.sh` or `modules/lib.sh` must not be redefined in menu-layer files.
-- When Phase 2 introduces new sourced framework files under `modules/`, update `modules/modules.list` in the same change so remote bootstrap can still download them.
+- When introducing new sourced framework files under `modules/`, update `modules/modules.list` in the same change so remote bootstrap can still download them.
 
 ## Validation
 
@@ -42,7 +59,7 @@ bash -n modules/example.sh
 bash -n modules/standalone/example.sh
 ```
 
-No test framework exists. `bash -n` is the only automated check. Always run it before considering work done.
+No test framework exists. `bash -n` is the only automated check. Always run it before considering work done. Use `make check` for one-command validation of all files.
 
 If you touch the menu framework, also syntax-check every touched framework file. When they exist, include `modules/menu_core.sh` and `modules/menu_ui.sh`. Keep both the interactive selector path and the plain fallback path behaviorally aligned.
 
