@@ -70,7 +70,75 @@ backup_crontab() {
     msg_ok "当前 crontab 已备份到: $backup_file"
 }
 
-# Crontab 中除了任务，还可能有注释、空行和环境变量。
+format_schedule() {
+    local line="$1"
+    local trimmed="${line#"${line%%[![:space:]]*}"}"
+
+    case "$trimmed" in
+        @reboot*)      printf "开机启动"; return ;;
+        @yearly*|@annually*) printf "每年"; return ;;
+        @monthly*)     printf "每月"; return ;;
+        @weekly*)      printf "每周"; return ;;
+        @daily*|@midnight*) printf "每天"; return ;;
+        @hourly*)      printf "每小时"; return ;;
+    esac
+
+    local minute hour dom month dow
+    read -r minute hour dom month dow _ <<< "$trimmed"
+
+    local desc=""
+    if [ "$dom" = "*" ] && [ "$month" = "*" ] && [ "$dow" = "*" ]; then
+        if [ "$minute" = "*" ] && [ "$hour" = "*" ]; then
+            desc="每分钟"
+        elif [ "$minute" = "*" ] && [ "$hour" != "*" ]; then
+            if [[ "$hour" == \*/+([0-9]) ]]; then
+                desc="每 ${hour#*/} 小时"
+            elif [[ "$hour" =~ ^[0-9,]+$ ]]; then
+                desc="每小时"
+            else
+                desc="每天 ${hour}:*"
+            fi
+        elif [ "$minute" != "*" ] && [ "$hour" = "*" ]; then
+            if [[ "$minute" == \*/+([0-9]) ]]; then
+                desc="每 ${minute#*/} 分钟"
+            else
+                desc="每小时 ${minute} 分"
+            fi
+        else
+            if [[ "$minute" == \*/+([0-9]) ]]; then
+                desc="每 ${minute#*/} 分钟"
+            else
+                desc="每天 $(printf '%02d:%02d' "$hour" "$minute")"
+            fi
+        fi
+    elif [ "$dom" = "*" ] && [ "$month" = "*" ] && [ "$dow" != "*" ]; then
+        if [ "$minute" != "*" ] && [ "$hour" != "*" ]; then
+            desc="每周 $(format_dow "$dow") $(printf '%02d:%02d' "$hour" "$minute")"
+        else
+            desc="每周 $(format_dow "$dow")"
+        fi
+    elif [ "$dom" != "*" ] && [ "$month" = "*" ] && [ "$dow" = "*" ]; then
+        desc="每月 ${dom} 号 $(printf '%02d:%02d' "$hour" "$minute")"
+    else
+        desc="${minute} ${hour} ${dom} ${month} ${dow}"
+    fi
+
+    printf '%s' "$desc"
+}
+
+format_dow() {
+    local dow="$1"
+    case "$dow" in
+        0|7) printf '日' ;;
+        1) printf '一' ;;
+        2) printf '二' ;;
+        3) printf '三' ;;
+        4) printf '四' ;;
+        5) printf '五' ;;
+        6) printf '六' ;;
+        *) printf '%s' "$dow" ;;
+    esac
+}
 is_crontab_job_line() {
     local line="$1"
     local trimmed=""
@@ -127,7 +195,8 @@ collect_crontab_entries() {
 
 show_crontab() {
     local i=0
-    local line_display=""
+    local schedule=""
+    local command=""
 
     collect_crontab_entries
     if [ "${#CRONTAB_JOB_LINES[@]}" -eq 0 ] && [ "${#CRONTAB_OTHER_LINES[@]}" -eq 0 ]; then
@@ -138,10 +207,15 @@ show_crontab() {
     if [ "${#CRONTAB_JOB_LINES[@]}" -gt 0 ]; then
         printf "%b当前任务:%b\n" "$BOLD" "$PLAIN"
         for ((i = 0; i < ${#CRONTAB_JOB_LINES[@]}; i++)); do
-            printf "  %02d  [line %s] %s\n" \
-                "$((i + 1))" \
-                "${CRONTAB_JOB_LINE_NUMBERS[$i]}" \
-                "${CRONTAB_JOB_LINES[$i]}"
+            schedule="$(format_schedule "${CRONTAB_JOB_LINES[$i]}")"
+            command="${CRONTAB_JOB_LINES[$i]}"
+            command="${command#${command%%[![:space:]]*}}"
+            case "$command" in
+                @*) command="${command#* }" ;;
+                *)  read -r _ _ _ _ _ command <<< "$command" ;;
+            esac
+            printf "  %02d. %b%-12s%b %s\n" \
+                "$((i + 1))" "$CYAN" "$schedule" "$PLAIN" "$command"
         done
     else
         msg_info "当前没有可执行任务"
@@ -150,11 +224,9 @@ show_crontab() {
     if [ "${#CRONTAB_OTHER_LINES[@]}" -gt 0 ]; then
         printf "\n%b其他行（注释 / 变量 / 空行）:%b\n" "$BOLD" "$PLAIN"
         for ((i = 0; i < ${#CRONTAB_OTHER_LINES[@]}; i++)); do
-            line_display="${CRONTAB_OTHER_LINES[$i]}"
+            local line_display="${CRONTAB_OTHER_LINES[$i]}"
             [ -n "$line_display" ] || line_display="<空行>"
-            printf "  --  [line %s] %s\n" \
-                "${CRONTAB_OTHER_LINE_NUMBERS[$i]}" \
-                "$line_display"
+            printf "  --  %s\n" "$line_display"
         done
     fi
 }
