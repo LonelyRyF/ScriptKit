@@ -4,6 +4,8 @@
 
 add_menu "scriptkit" "ScriptKit 管理" "utility"
 add_action "scriptkit_status" "查看运行状态" "scriptkit" "show_scriptkit_status"
+add_action "scriptkit_view_log" "查看操作日志" "scriptkit" "show_action_log"
+add_action "scriptkit_clear_log" "清理操作日志" "scriptkit" "clear_action_log"
 add_action "scriptkit_refresh_modules" "刷新远程模块缓存" "scriptkit" "refresh_remote_module_cache"
 add_action "scriptkit_clear_cache" "清理模块缓存" "scriptkit" "clear_module_cache"
 
@@ -60,6 +62,64 @@ show_scriptkit_status() {
             printf '  '
             ui_warn "$warning"
         done
+    fi
+}
+
+show_action_log() {
+    local line
+    local -a recent=()
+
+    scriptkit_draw_current_title "查看操作日志"
+    printf "日志文件: %s\n\n" "$SCRIPTKIT_LOG_FILE"
+
+    if [ ! -f "$SCRIPTKIT_LOG_FILE" ]; then
+        ui_info "暂无操作记录。"
+        return 0
+    fi
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        recent+=("$line")
+        if [ "${#recent[@]}" -gt 20 ]; then
+            recent=("${recent[@]:1}")
+        fi
+    done <"$SCRIPTKIT_LOG_FILE"
+
+    if [ "${#recent[@]}" -eq 0 ]; then
+        ui_info "暂无操作记录。"
+        return 0
+    fi
+
+    printf "%b最近 20 条操作:%b\n\n" "$BOLD" "$PLAIN"
+    for line in "${recent[@]}"; do
+        printf "  %s\n" "$line"
+    done
+}
+
+clear_action_log() {
+    local line_count=0
+    local line
+
+    scriptkit_draw_current_title "清理操作日志"
+    printf "日志文件: %s\n" "$SCRIPTKIT_LOG_FILE"
+
+    if [ ! -f "$SCRIPTKIT_LOG_FILE" ]; then
+        ui_info "暂无日志文件。"
+        return 0
+    fi
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line_count=$((line_count + 1))
+    done <"$SCRIPTKIT_LOG_FILE"
+    printf "记录条数: %s\n\n" "$line_count"
+
+    if yesno_select "确认清理所有操作日志？"; then
+        : >"$SCRIPTKIT_LOG_FILE" 2>/dev/null || {
+            ui_error "操作日志清理失败。"
+            return 1
+        }
+        ui_ok "操作日志已清理。"
+    else
+        ui_info "已取消。"
     fi
 }
 

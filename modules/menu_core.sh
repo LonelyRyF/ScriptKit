@@ -14,9 +14,30 @@ declare -gA ITEM_TARGETS=()
 declare -gA ITEM_PARENTS=()
 declare -ga MENU_WARNINGS=()
 declare -ga LOADED_MODULES=()
+declare -ga GLOBAL_SEARCH_RESULTS=()
+
+SCRIPTKIT_LOG_DIR="${XDG_DATA_HOME:-${HOME:-.}/.local/share}/scriptkit"
+SCRIPTKIT_LOG_FILE="$SCRIPTKIT_LOG_DIR/history.log"
+SCRIPTKIT_LOG_ENABLED="${SCRIPTKIT_LOG_ENABLED:-1}"
 
 record_menu_warning() {
     MENU_WARNINGS+=("$1")
+}
+
+log_action() {
+    local type="$1"
+    local id="$2"
+    local title="$3"
+    local result="$4"
+    local timestamp=""
+
+    [ "$SCRIPTKIT_LOG_ENABLED" = "1" ] || return 0
+    mkdir -p "$SCRIPTKIT_LOG_DIR" 2>/dev/null || return 0
+
+    timestamp="$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null)" || timestamp="$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" || timestamp="unknown-time"
+    printf '%s | %-7s | %-24s | %s | %s\n' \
+        "$timestamp" "$type" "$id" "$title" "$result" \
+        >>"$SCRIPTKIT_LOG_FILE" 2>/dev/null || return 0
 }
 
 add_menu() {
@@ -113,10 +134,13 @@ run_action() {
     local item_id="$1"
     local handler="$2"
     local item_path="$(build_item_path "$item_id")"
+    local item_title="${ITEM_TITLES[$item_id]:-$item_id}"
     local menu_id="${ITEM_PARENTS[$item_id]:-$CURRENT_MENU}"
     local menu_path="$(build_menu_path "$menu_id")"
     local previous_menu_path="${SCRIPTKIT_CURRENT_MENU_PATH:-}"
     local previous_item_path="${SCRIPTKIT_CURRENT_ITEM_PATH:-}"
+    local status=0
+    local result="success"
 
     clear 2>/dev/null || true
     SCRIPTKIT_CURRENT_MENU_PATH="$menu_path"
@@ -124,12 +148,16 @@ run_action() {
     CURRENT_ITEM_PATH="$item_path"
     if declare -F "$handler" >/dev/null 2>&1; then
         "$handler"
+        status=$?
     else
         ui_error "处理函数未找到: $handler"
+        status=127
     fi
     SCRIPTKIT_CURRENT_MENU_PATH="$previous_menu_path"
     SCRIPTKIT_CURRENT_ITEM_PATH="$previous_item_path"
     CURRENT_ITEM_PATH="$previous_item_path"
+    [ "$status" -eq 0 ] || result="failed"
+    log_action "action" "$item_id" "$item_title" "$result"
     pause_screen
 }
 
@@ -187,16 +215,110 @@ run_script() {
     local script_path="$2"
     local script_file=""
     local item_path="$(build_item_path "$item_id")"
+    local item_title="${ITEM_TITLES[$item_id]:-$item_id}"
     local menu_id="${ITEM_PARENTS[$item_id]:-$CURRENT_MENU}"
     local menu_path="$(build_menu_path "$menu_id")"
+    local status=0
+    local result="success"
 
     clear 2>/dev/null || true
     if script_file="$(resolve_script_file "$script_path")"; then
         SCRIPTKIT_CURRENT_MENU_PATH="$menu_path" SCRIPTKIT_CURRENT_ITEM_PATH="$item_path" bash "$script_file"
+        status=$?
     else
         ui_error "脚本未找到: $script_path"
+        status=127
     fi
+    [ "$status" -eq 0 ] || result="failed"
+    log_action "script" "$item_id" "$item_title" "$result"
     pause_screen
+}
+
+dispatch_item() {
+    local selected="$1"
+    local type="${ITEM_TYPES[$selected]:-}"
+    local target="${ITEM_TARGETS[$selected]:-}"
+
+    case "$type" in
+        menu)
+            CURRENT_MENU="$target"
+            ;;
+        action)
+            run_action "$selected" "$target"
+            ;;
+        script)
+            run_script "$selected" "$target"
+            ;;
+    esac
+}
+
+format_search_result_title() {
+    local id="$1"
+    local title="${ITEM_TITLES[$id]:-$id}"
+    local parent="${ITEM_PARENTS[$id]:-}"
+    local parent_path=""
+
+    if [ -n "$parent" ]; then
+        parent_path="$(build_menu_path "$parent")"
+        printf '%s (%s)' "$title" "$parent_path"
+    else
+        printf '%s' "$title"
+    fi
+}
+
+collect_global_search_results() {
+    local menu_id="$1"
+    local filter_text="$2"
+    local child type
+
+    for child in ${MENU_CHILDREN[$menu_id]:-}; do
+        type="${ITEM_TYPES[$child]:-}"
+        case "$type" in
+            menu)
+                if item_matches_filter "$child" "$filter_text"; then
+                    GLOBAL_SEARCH_RESULTS+=("$child")
+                fi
+                collect_global_search_results "$child" "$filter_text"
+                ;;
+        esac
+    done
+}
+
+global_search_items() {
+    local filter_text="${1:-}"
+    local id
+    local -a results=()
+
+    [ -n "$filter_text" ] || return 1
+
+    GLOBAL_SEARCH_RESULTS=()
+    collect_global_search_results "$ROOT_MENU" "$filter_text"
+
+    for id in "${GLOBAL_SEARCH_RESULTS[@]}"; do
+        ITEM_TITLES["__search_result_$id"]="$(format_search_result_title "$id")"
+        ITEM_TYPES["__search_result_$id"]="search_result"
+        ITEM_TARGETS["__search_result_$id"]="$id"
+        results+=("__search_result_$id")
+    done
+
+    if [ "${#results[@]}" -eq 0 ]; then
+        ITEM_TITLES["__no_global_match"]="没有全局匹配结果"
+        ITEM_TYPES["__no_global_match"]="empty"
+        ITEM_TARGETS["__no_global_match"]=""
+        results+=("__no_global_match")
+    fi
+
+    ITEM_TITLES["__back"]="返回"
+    ITEM_TYPES["__back"]="back"
+    ITEM_TARGETS["__back"]=""
+    results+=("__back")
+
+    select_list "全局搜索: $filter_text" "${results[@]}"
+    case "${ITEM_TYPES[$SELECT_RESULT]:-}" in
+        search_result)
+            CURRENT_MENU="${ITEM_TARGETS[$SELECT_RESULT]:-$CURRENT_MENU}"
+            ;;
+    esac
 }
 
 is_safe_module_path() {
@@ -362,7 +484,7 @@ show_menu() {
     local menu_id="$1"
     local title
     local -a items=()
-    local child selected type target
+    local child selected type target search_filter
 
     title="$(build_menu_path "$menu_id")"
 
@@ -393,14 +515,12 @@ show_menu() {
     target="${ITEM_TARGETS[$selected]:-}"
 
     case "$type" in
-        menu)
-            CURRENT_MENU="$target"
+        menu | action | script)
+            dispatch_item "$selected"
             ;;
-        action)
-            run_action "$selected" "$target"
-            ;;
-        script)
-            run_script "$selected" "$target"
+        search)
+            search_filter="${ITEM_TARGETS[$selected]:-}"
+            global_search_items "$search_filter"
             ;;
         back)
             CURRENT_MENU="${MENU_PARENTS[$menu_id]:-$ROOT_MENU}"
