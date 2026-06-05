@@ -338,7 +338,7 @@ download_remote_modules() {
     local checksum_url="${MODULE_BASE_URL%/}/modules.sha256"
     local module_path module_url module_file module_parent
     local expected_hash local_hash
-    local total=0 current=0 skipped=0
+    local total=0 current=0 skipped=0 downloaded=0
 
     [ -n "$MODULE_MANIFEST_URL" ] || return 1
     mkdir -p "$MODULE_CACHE_DIR" || return 1
@@ -372,7 +372,7 @@ download_remote_modules() {
         module_file="$MODULE_CACHE_DIR/$module_path"
         module_parent="$(dirname -- "$module_file")"
 
-        # Check if cached file matches expected hash
+        # Check if cached file matches expected hash — skip download
         if [ -n "$checksum_file" ] && [ -f "$module_file" ]; then
             expected_hash="$(grep -E "[ *]${module_path}$" "$checksum_file" 2>/dev/null | head -1 | cut -d' ' -f1)"
             if [ -n "$expected_hash" ]; then
@@ -388,25 +388,33 @@ download_remote_modules() {
 
         mkdir -p "$module_parent" || return 1
         download_file "$module_url" "$module_file" || return 1
-
-        # Verify downloaded file hash
-        if [ -n "$checksum_file" ]; then
-            expected_hash="$(grep -E "[ *]${module_path}$" "$checksum_file" 2>/dev/null | head -1 | cut -d' ' -f1)"
-            if [ -n "$expected_hash" ]; then
-                local_hash="$(sha256sum "$module_file" 2>/dev/null | cut -d' ' -f1)"
-                if [ "$local_hash" != "$expected_hash" ]; then
-                    printf '\r\033[K' >&2
-                    ui_warn "校验失败: $module_path (期望 ${expected_hash:0:12}... 实际 ${local_hash:0:12}...)" >&2
-                fi
-            fi
-        fi
+        downloaded=$((downloaded + 1))
     done <"$manifest_file"
 
-    if [ "$skipped" -gt 0 ]; then
-        printf '\r\033[K  已缓存 %d/%d 个模块，下载 %d 个\n' "$skipped" "$total" "$((total - skipped))" >&2
-        sleep 1
-    fi
     printf '\r\033[K' >&2
+
+    # Batch verify after all downloads complete
+    if [ -n "$checksum_file" ] && [ "$downloaded" -gt 0 ]; then
+        printf '  正在校验模块完整性 ...\r' >&2
+        local verify_output
+        verify_output="$(cd "$MODULE_CACHE_DIR" && sha256sum -c "$checksum_file" 2>/dev/null | grep -i 'FAILED')" || true
+        printf '\r\033[K' >&2
+        if [ -n "$verify_output" ]; then
+            printf '\n' >&2
+            ui_error "模块完整性校验失败:" >&2
+            printf '%s\n\n' "$verify_output" >&2
+            if ! yesno_select "存在校验失败的模块，是否继续加载？"; then
+                ui_error "已中止加载。" >&2
+                exit 1
+            fi
+        fi
+    fi
+
+    if [ "$skipped" -gt 0 ] || [ "$downloaded" -gt 0 ]; then
+        printf '  已缓存 %d 个，下载 %d 个，共 %d 个模块\n' "$skipped" "$downloaded" "$total" >&2
+        sleep 1
+        printf '\r\033[K' >&2
+    fi
 }
 
 should_source_module_file() {
