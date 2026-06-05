@@ -1,4 +1,4 @@
-.PHONY: check
+.PHONY: check checksums
 
 check:
 	@echo "Syntax checking..."
@@ -6,3 +6,7 @@ check:
 	@for f in modules/*.sh; do bash -n "$$f"; done
 	@for f in modules/standalone/*.sh; do bash -n "$$f"; done
 	@echo "All files OK"
+
+checksums:
+	@cd modules && find . -name '*.sh' -o -name '*.list' | sed 's|^\./||' | sort | xargs sha256sum > modules.sha256
+	@echo "Generated modules/modules.sha256"

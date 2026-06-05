@@ -334,14 +334,20 @@ is_safe_module_path() {
 
 download_remote_modules() {
     local manifest_file="$MODULE_CACHE_DIR/modules.list"
+    local checksum_file="$MODULE_CACHE_DIR/modules.sha256"
+    local checksum_url="${MODULE_BASE_URL%/}/modules.sha256"
     local module_path module_url module_file module_parent
-    local total=0 current=0
+    local expected_hash local_hash
+    local total=0 current=0 skipped=0
 
     [ -n "$MODULE_MANIFEST_URL" ] || return 1
     mkdir -p "$MODULE_CACHE_DIR" || return 1
 
     printf '\r\033[K  正在获取模块清单 ...' >&2
     download_file "$MODULE_MANIFEST_URL" "$manifest_file" || { printf '\r\033[K' >&2; return 1; }
+
+    # Download checksum file (optional, non-fatal if missing)
+    download_file "$checksum_url" "$checksum_file" 2>/dev/null || checksum_file=""
     printf '\r\033[K' >&2
 
     while IFS= read -r module_path || [ -n "$module_path" ]; do
@@ -362,15 +368,44 @@ download_remote_modules() {
         is_safe_module_path "$module_path" || continue
 
         current=$((current + 1))
-        printf '\r\033[K  正在下载模块 [%d/%d] %s ...' "$current" "$total" "$module_path" >&2
-
         module_url="${MODULE_BASE_URL%/}/$module_path"
         module_file="$MODULE_CACHE_DIR/$module_path"
         module_parent="$(dirname -- "$module_file")"
+
+        # Check if cached file matches expected hash
+        if [ -n "$checksum_file" ] && [ -f "$module_file" ]; then
+            expected_hash="$(grep -E "[ *]${module_path}$" "$checksum_file" 2>/dev/null | head -1 | cut -d' ' -f1)"
+            if [ -n "$expected_hash" ]; then
+                local_hash="$(sha256sum "$module_file" 2>/dev/null | cut -d' ' -f1)"
+                if [ "$local_hash" = "$expected_hash" ]; then
+                    skipped=$((skipped + 1))
+                    continue
+                fi
+            fi
+        fi
+
+        printf '\r\033[K  正在下载模块 [%d/%d] %s ...' "$current" "$total" "$module_path" >&2
+
         mkdir -p "$module_parent" || return 1
         download_file "$module_url" "$module_file" || return 1
+
+        # Verify downloaded file hash
+        if [ -n "$checksum_file" ]; then
+            expected_hash="$(grep -E "[ *]${module_path}$" "$checksum_file" 2>/dev/null | head -1 | cut -d' ' -f1)"
+            if [ -n "$expected_hash" ]; then
+                local_hash="$(sha256sum "$module_file" 2>/dev/null | cut -d' ' -f1)"
+                if [ "$local_hash" != "$expected_hash" ]; then
+                    printf '\r\033[K' >&2
+                    ui_warn "校验失败: $module_path (期望 ${expected_hash:0:12}... 实际 ${local_hash:0:12}...)" >&2
+                fi
+            fi
+        fi
     done <"$manifest_file"
 
+    if [ "$skipped" -gt 0 ]; then
+        printf '\r\033[K  已缓存 %d/%d 个模块，下载 %d 个\n' "$skipped" "$total" "$((total - skipped))" >&2
+        sleep 1
+    fi
     printf '\r\033[K' >&2
 }
 
