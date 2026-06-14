@@ -161,7 +161,7 @@ add_action "manage_services_failed" "查看失败服务" "manage_services" "mana
 add_action "manage_services_stop" "停止服务" "manage_services" "manage_services_stop_run"
 add_action "manage_services_disable" "关闭开机自启" "manage_services" "manage_services_disable_run"
 add_action "manage_services_uninstall" "卸载用户安装服务" "manage_services" "manage_services_uninstall_run"
-add_menu "manage_linux_mirrors" "LinuxMirrors 换源" "manage"
+add_menu "manage_linux_mirrors" "LinuxMirror Docker 换源工具" "manage"
 add_action "manage_linux_mirrors_official" "Official" "manage_linux_mirrors" "manage_linux_mirrors_official_run"
 add_action "manage_linux_mirrors_github" "GitHub raw" "manage_linux_mirrors" "manage_linux_mirrors_github_run"
 add_action "manage_linux_mirrors_gitee" "Gitee raw（国内推荐）" "manage_linux_mirrors" "manage_linux_mirrors_gitee_run"
