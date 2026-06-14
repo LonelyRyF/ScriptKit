@@ -9,6 +9,10 @@ can_use_tput_menu() {
     command_exists tput && [ -t 0 ] && [ -t 1 ] && tput lines >/dev/null 2>&1 && tput cup 0 0 >/dev/null 2>&1
 }
 
+should_use_plain_menu() {
+    [ "${SCRIPTKIT_MENU_MODE:-auto}" = "plain" ]
+}
+
 pause_screen() {
     printf '\n%b' "$(ui_prompt "提示" "按 Enter 返回菜单...")"
     read -r _
@@ -169,19 +173,17 @@ interactive_select_list() {
         local cols="$2"
         local selected_id="${values[$selection_index]}"
         local tip=""
-        local footer_line=""
 
         tip="$(format_item_tip "$selected_id")"
 
         scriptkit_line_wraps "------------------------------------------------" "$cols" && return 0
         scriptkit_line_wraps "Enter → $tip  Move Up/Down  Search /  Help ?  Back ←  Quit q" "$cols" && return 0
+        scriptkit_line_wraps "Numbered mode F" "$cols" && return 0
 
         if [ -n "$filter_text" ]; then
-            footer_line="Filter $filter_text  Powered by rainyfall.dev"
-        else
-            footer_line="Powered by rainyfall.dev"
+            scriptkit_line_wraps "Filter $filter_text" "$cols" && return 0
         fi
-        scriptkit_line_wraps "$footer_line" "$cols" && return 0
+        scriptkit_line_wraps "Powered by rainyfall.dev" "$cols" && return 0
 
         return 1
     }
@@ -238,8 +240,9 @@ interactive_select_list() {
         tip="$(format_item_tip "$selected_id")"
         printf "\n%b------------------------------------------------%b\n" "$BOLD" "$PLAIN"
         printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q\n" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
+        printf "%bNumbered mode%b F\n" "$YELLOW" "$PLAIN"
         if [ -n "$filter_text" ]; then
-            printf "%bFilter%b %s  " "$YELLOW" "$PLAIN" "$filter_text"
+            printf "%bFilter%b %s\n" "$YELLOW" "$PLAIN" "$filter_text"
         fi
         printf "%bPowered by %b%s%b\n" "$ITALIC" "$CYAN" "rainyfall.dev" "$PLAIN"
 
@@ -282,8 +285,16 @@ interactive_select_list() {
         printf "%bEnter →%b %s  %bMove%b Up/Down  %bSearch%b /  %bHelp%b ?  %bBack%b ←  %bQuit%b q" "$GREEN" "$PLAIN" "$tip" "$CYAN" "$PLAIN" "$YELLOW" "$PLAIN" "$CYAN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN"
         tput cup "$((footer_line + 2))" 0 2>/dev/null || true
         tput el 2>/dev/null || true
+        printf "%bNumbered mode%b F" "$YELLOW" "$PLAIN"
+        tput cup "$((footer_line + 3))" 0 2>/dev/null || true
+        tput el 2>/dev/null || true
         if [ -n "$filter_text" ]; then
-            printf "%bFilter%b %s  " "$YELLOW" "$PLAIN" "$filter_text"
+            printf "%bFilter%b %s" "$YELLOW" "$PLAIN" "$filter_text"
+            tput cup "$((footer_line + 4))" 0 2>/dev/null || true
+            tput el 2>/dev/null || true
+        else
+            tput cup "$((footer_line + 4))" 0 2>/dev/null || true
+            tput el 2>/dev/null || true
         fi
         printf "%bPowered by %b%s%b" "$ITALIC" "$CYAN" "rainyfall.dev" "$PLAIN"
 
@@ -298,6 +309,7 @@ interactive_select_list() {
         printf 'PgUp/PgDn    上下翻页\n'
         printf 'g/G          跳到顶部/底部\n'
         printf 'Left/Bs      返回上级菜单\n'
+        printf 'F            Switch to numbered mode\n'
         printf '/            搜索当前菜单，并在顶部提供全局菜单搜索入口\n'
         printf 'Esc          清除当前搜索\n'
         printf 'q            退出 ScriptKit\n'
@@ -388,6 +400,11 @@ interactive_select_list() {
                 draw_menu
                 continue
                 ;;
+            "f" | "F")
+                SCRIPTKIT_MENU_MODE="plain"
+                SELECT_RESULT="__refresh"
+                break
+                ;;
             "ESC")
                 if [ -n "$filter_text" ]; then
                     filter_text=""
@@ -421,6 +438,9 @@ interactive_select_list() {
     done
 
     tput cnorm 2>/dev/null || true
+    if [ "$SELECT_RESULT" = "__refresh" ]; then
+        tput rmcup 2>/dev/null || true
+    fi
     trap - INT TERM WINCH
 }
 
@@ -523,8 +543,13 @@ plain_select_list() {
 }
 
 select_list() {
-    if can_use_tput_menu; then
+    if should_use_plain_menu; then
+        plain_select_list "$@"
+    elif can_use_tput_menu; then
         interactive_select_list "$@"
+        if [ "$SELECT_RESULT" = "__refresh" ]; then
+            plain_select_list "$@"
+        fi
     else
         plain_select_list "$@"
     fi

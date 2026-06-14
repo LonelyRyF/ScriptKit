@@ -203,6 +203,7 @@ run_standalone_with_env() {
 
     env_vars+=("SCRIPTKIT_CURRENT_MENU_PATH=${SCRIPTKIT_CURRENT_MENU_PATH:-}")
     env_vars+=("SCRIPTKIT_CURRENT_ITEM_PATH=${SCRIPTKIT_CURRENT_ITEM_PATH:-}")
+    env_vars+=("SCRIPTKIT_MENU_MODE=${SCRIPTKIT_MENU_MODE:-auto}")
     while [ "$#" -gt 0 ]; do
         env_vars+=("$1")
         shift
@@ -225,7 +226,7 @@ run_script() {
     tput rmcup 2>/dev/null || true
     clear 2>/dev/null || true
     if script_file="$(resolve_script_file "$script_path")"; then
-        SCRIPTKIT_CURRENT_MENU_PATH="$menu_path" SCRIPTKIT_CURRENT_ITEM_PATH="$item_path" bash "$script_file"
+        SCRIPTKIT_CURRENT_MENU_PATH="$menu_path" SCRIPTKIT_CURRENT_ITEM_PATH="$item_path" SCRIPTKIT_MENU_MODE="${SCRIPTKIT_MENU_MODE:-auto}" bash "$script_file"
         status=$?
     else
         ui_error "脚本未找到: $script_path"

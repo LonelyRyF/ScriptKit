@@ -17,6 +17,10 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+scriptkit_should_use_plain_mode() {
+    [ "${SCRIPTKIT_MENU_MODE:-auto}" = "plain" ]
+}
+
 download_file() {
     local url="$1"
     local output="$2"
@@ -183,7 +187,7 @@ yesno_select() {
     [ "$default" = "y" ] && cursor=0
     decorated_prompt="$(ui_prompt "确认" "$prompt")"
 
-    if ! command_exists tput || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 >/dev/null 2>&1; then
+    if scriptkit_should_use_plain_mode || ! command_exists tput || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 >/dev/null 2>&1; then
         local ans=""
         printf "%b [y/N]: " "$decorated_prompt"
         read -r ans
@@ -245,7 +249,7 @@ multiselect_menu() {
     local count=${#_labels[@]}
     local i
 
-    if ! command_exists tput || ! tput cup 0 0 >/dev/null 2>&1; then
+    if scriptkit_should_use_plain_mode || ! command_exists tput || ! tput cup 0 0 >/dev/null 2>&1; then
         printf "%b%s%b\n" "$BOLD" "$title" "$PLAIN"
         printf "输入编号切换选中（空格分隔），直接回车确认:\n\n"
         for ((i = 0; i < count; i++)); do
@@ -386,7 +390,7 @@ select_menu() {
         printf "%bUp/Down%b 移动  %bEnter%b 确认  %bq%b 退出\n" "$GREEN" "$PLAIN" "$CYAN" "$PLAIN" "$RED" "$PLAIN" >&2
     }
 
-    if ! command_exists tput || ! [ -t 0 ] || ! [ -t 2 ] || ! tput cup 0 0 >/dev/null 2>&1; then
+    if scriptkit_should_use_plain_mode || ! command_exists tput || ! [ -t 0 ] || ! [ -t 2 ] || ! tput cup 0 0 >/dev/null 2>&1; then
         local choice=""
         local plain_prefix=""
         local plain_indent=""
