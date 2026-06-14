@@ -159,6 +159,38 @@ scriptkit_step_title() {
     fi
 }
 
+scriptkit_compact_title() {
+    local title="${1:-}"
+
+    printf '%s' "${title##* / }"
+}
+
+scriptkit_selection_summary_title() {
+    local title=""
+
+    title="$(scriptkit_compact_title "${1:-}")"
+    printf '%s' "${title#选择 }"
+}
+
+scriptkit_clear_recent_lines() {
+    local lines="${1:-0}"
+    local i=0
+
+    if ! [[ "$lines" =~ ^[0-9]+$ ]] || [ "$lines" -le 0 ]; then
+        return 0
+    fi
+
+    tput cuu "$lines" 2>/dev/null || printf '\033[%sA' "$lines"
+    for ((i = 0; i < lines; i++)); do
+        tput el 2>/dev/null || printf '\033[K'
+        if [ "$i" -lt $((lines - 1)) ]; then
+            printf '\n'
+        fi
+    done
+    tput cuu "$((lines - 1))" 2>/dev/null || printf '\033[%sA' "$((lines - 1))"
+    tput el 2>/dev/null || printf '\033[K'
+}
+
 scriptkit_draw_current_title() {
     draw_title_bar "$(scriptkit_current_title "$1")"
 }
@@ -183,16 +215,61 @@ yesno_select() {
     local default="${2:-n}"
     local cursor=1
     local decorated_prompt=""
+    local numbered_prompt=""
 
     [ "$default" = "y" ] && cursor=0
     decorated_prompt="$(ui_prompt "确认" "$prompt")"
+    numbered_prompt="$(scriptkit_compact_title "$prompt")"
 
-    if scriptkit_should_use_plain_mode || ! command_exists tput || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 >/dev/null 2>&1; then
+    if scriptkit_should_use_plain_mode; then
+        local choice=""
+
+        draw_title_bar "$numbered_prompt"
+        printf "  1) 是"
+        [ "$default" = "y" ] && printf "（默认）"
+        printf "\n"
+        printf "  2) 否"
+        [ "$default" = "n" ] && printf "（默认）"
+        printf "\n\n"
+        printf '%b' "$(ui_prompt "输入" "请选择 [1-2]（回车使用默认）: ")"
+        read -r choice
+        case "${choice:-}" in
+            "" ) choice="$([ "$default" = "y" ] && printf '1' || printf '2')" ;;
+            1|2) ;;
+            y|Y) choice="1" ;;
+            n|N) choice="2" ;;
+            q|Q|ESC) return 1 ;;
+            *)
+                ui_warn "输入无效"
+                return 1
+                ;;
+        esac
+
+        scriptkit_clear_recent_lines 6
+
+        if [ "$choice" = "1" ]; then
+            printf '%b 是\n' "$(ui_prompt "已选" "${prompt}: ")"
+            return 0
+        fi
+
+        printf '%b 否\n' "$(ui_prompt "已选" "${prompt}: ")"
+        return 1
+    fi
+
+    if ! command_exists tput || ! [ -t 0 ] || ! [ -t 1 ] || ! tput cup 0 0 >/dev/null 2>&1; then
         local ans=""
-        printf "%b [y/N]: " "$decorated_prompt"
+        if [ "$default" = "y" ]; then
+            printf "%b [Y/n/1/2]: " "$decorated_prompt"
+        else
+            printf "%b [y/N/1/2]: " "$decorated_prompt"
+        fi
         read -r ans
         ans=$(printf '%s' "${ans:-$default}" | tr '[:upper:]' '[:lower:]')
-        [ "$ans" = "y" ] && return 0 || return 1
+        case "$ans" in
+            y|1) return 0 ;;
+            n|2) return 1 ;;
+            *) return 1 ;;
+        esac
     fi
 
     _scriptkit_draw_yesno() {
@@ -368,7 +445,9 @@ select_menu() {
     show_selected_result() {
         local label="$1"
         local first_line="${label%%$'\n'*}"
-        local summary_title="${title#选择 }"
+        local summary_title=""
+
+        summary_title="$(scriptkit_selection_summary_title "$title")"
 
         printf '%b %s\n' "$(ui_prompt "已选" "${summary_title}: ")" "$first_line" >&2
     }
@@ -394,8 +473,12 @@ select_menu() {
         local choice=""
         local plain_prefix=""
         local plain_indent=""
+        local compact_title=""
+        local lines_to_clear=0
 
-        draw_title_bar "$title" >&2
+        compact_title="$(scriptkit_compact_title "$title")"
+
+        draw_title_bar "$compact_title" >&2
         for ((i = 0; i < count; i++)); do
             printf -v plain_prefix '  %d) ' "$((i + 1))"
             printf -v plain_indent '%*s' "${#plain_prefix}" ''
@@ -413,6 +496,8 @@ select_menu() {
         fi
 
         _selected=$((choice - 1))
+        lines_to_clear=$((count + 4))
+        scriptkit_clear_recent_lines "$lines_to_clear" >&2
         show_selected_result "${_labels[$_selected]}"
         return 0
     fi
