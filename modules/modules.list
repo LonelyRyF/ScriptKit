@@ -10,9 +10,9 @@ manage.sh
 network.sh
 security.sh
 app.sh
+proxy.sh
 utility.sh
 scriptkit_admin.sh
-proxy.sh
 
 # Shared library (sourced by standalone scripts)
 runtime.sh

@@ -2,7 +2,7 @@
 
 # ScriptKit self-management module, loaded by load_modules.
 
-add_menu "scriptkit" "ScriptKit 管理" "utility"
+add_menu "scriptkit" "ScriptKit 管理" "main"
 add_action "scriptkit_status" "查看运行状态" "scriptkit" "show_scriptkit_status"
 add_action "scriptkit_view_log" "查看操作日志" "scriptkit" "show_action_log"
 add_action "scriptkit_clear_log" "清理操作日志" "scriptkit" "clear_action_log"
