@@ -16,6 +16,7 @@ SSH_PORT="22"
 MIRROR=""
 IMAGE_URL=""
 WINDOWS_LANG=""
+STACK_MODE=""
 IP4_ADDR=""
 IP4_MASK=""
 IP4_GATE=""
@@ -40,6 +41,17 @@ handle_interrupt() {
 
 trap cleanup_temp EXIT
 trap handle_interrupt INT TERM
+
+supports_mirror_override() {
+    case "$SYSTEM" in
+        ubuntu|windows|dd|netboot.xyz)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
 
 select_system() {
     local -a systems=(
@@ -116,13 +128,25 @@ select_arch() {
 collect_auth_inputs() {
     [ "$SYSTEM" = "netboot.xyz" ] && return 0
 
-    printf '%b' "$(msg_prompt "输入" "root 密码（留空默认 LeitboGi0ro）: ")"
-    read -rs PASSWORD
-    printf '\n'
-    PASSWORD="${PASSWORD:-LeitboGi0ro}"
-    if [ "$PASSWORD" = "LeitboGi0ro" ]; then
-        msg_warn "未自定义密码，将使用默认密码 LeitboGi0ro"
-    fi
+    case "$SYSTEM" in
+        windows)
+            msg_warn "默认 Windows 镜像的最终登录信息固定为 Administrator / Teddysun.com，RDP 端口为 3389"
+            return 0
+            ;;
+        alpine)
+            PASSWORD="LeitboGi0ro"
+            msg_warn "Alpine 最终密码固定为 LeitboGi0ro，上游脚本会忽略自定义密码"
+            ;;
+        *)
+            printf '%b' "$(msg_prompt "输入" "root 密码（留空默认 LeitboGi0ro）: ")"
+            read -rs PASSWORD
+            printf '\n'
+            PASSWORD="${PASSWORD:-LeitboGi0ro}"
+            if [ "$PASSWORD" = "LeitboGi0ro" ]; then
+                msg_warn "未自定义密码，将使用默认密码 LeitboGi0ro"
+            fi
+            ;;
+    esac
 
     printf '%b' "$(msg_prompt "输入" "SSH 端口（默认 22）: ")"
     read -r SSH_PORT
@@ -152,39 +176,59 @@ collect_source_inputs() {
         netboot.xyz)
             return 0
             ;;
+        ubuntu)
+            msg_info "Ubuntu 将走上游 cloud image 流程，-mirror 参数不会生效"
+            return 0
+            ;;
     esac
 
-    printf '%b' "$(msg_prompt "输入" "自定义镜像源（留空使用默认）: ")"
-    read -r MIRROR
+    if supports_mirror_override; then
+        printf '%b' "$(msg_prompt "输入" "自定义镜像源（留空使用默认）: ")"
+        read -r MIRROR
+    fi
 }
 
 collect_network_inputs() {
+    local stack_choice=""
+
     if ! yesno_select "是否自定义网络参数？"; then
         return 0
     fi
 
-    printf '%b' "$(msg_prompt "输入" "IPv4 地址（留空使用 DHCP）: ")"
-    read -r IP4_ADDR
-    if [ -n "$IP4_ADDR" ]; then
-        printf '%b' "$(msg_prompt "输入" "IPv4 子网掩码: ")"
-        read -r IP4_MASK
-        printf '%b' "$(msg_prompt "输入" "IPv4 网关: ")"
-        read -r IP4_GATE
-        printf '%b' "$(msg_prompt "输入" "IPv4 DNS（默认 8.8.8.8 1.1.1.1）: ")"
-        read -r IP4_DNS
-        IP4_DNS="${IP4_DNS:-8.8.8.8 1.1.1.1}"
+    stack_choice="$(pick_from_options "选择网络栈" "自动检测" "双栈" "仅 IPv4" "仅 IPv6")" || exit 0
+    case "$stack_choice" in
+        双栈) STACK_MODE="dual" ;;
+        仅\ IPv4) STACK_MODE="ipv4" ;;
+        仅\ IPv6) STACK_MODE="ipv6" ;;
+        *) STACK_MODE="auto" ;;
+    esac
+
+    if [ "$STACK_MODE" != "ipv6" ]; then
+        printf '%b' "$(msg_prompt "输入" "IPv4 地址（留空使用 DHCP）: ")"
+        read -r IP4_ADDR
+        if [ -n "$IP4_ADDR" ]; then
+            printf '%b' "$(msg_prompt "输入" "IPv4 子网掩码: ")"
+            read -r IP4_MASK
+            printf '%b' "$(msg_prompt "输入" "IPv4 网关: ")"
+            read -r IP4_GATE
+            printf '%b' "$(msg_prompt "输入" "IPv4 DNS（默认 8.8.8.8 1.1.1.1）: ")"
+            read -r IP4_DNS
+            IP4_DNS="${IP4_DNS:-8.8.8.8 1.1.1.1}"
+        fi
     fi
 
-    printf '%b' "$(msg_prompt "输入" "IPv6 地址（留空则禁用静态 IPv6）: ")"
-    read -r IP6_ADDR
-    if [ -n "$IP6_ADDR" ]; then
-        printf '%b' "$(msg_prompt "输入" "IPv6 前缀长度: ")"
-        read -r IP6_MASK
-        printf '%b' "$(msg_prompt "输入" "IPv6 网关: ")"
-        read -r IP6_GATE
-        printf '%b' "$(msg_prompt "输入" "IPv6 DNS（默认 2001:4860:4860::8888 2606:4700:4700::1111）: ")"
-        read -r IP6_DNS
-        IP6_DNS="${IP6_DNS:-2001:4860:4860::8888 2606:4700:4700::1111}"
+    if [ "$STACK_MODE" != "ipv4" ]; then
+        printf '%b' "$(msg_prompt "输入" "IPv6 地址（留空使用自动配置）: ")"
+        read -r IP6_ADDR
+        if [ -n "$IP6_ADDR" ]; then
+            printf '%b' "$(msg_prompt "输入" "IPv6 前缀长度: ")"
+            read -r IP6_MASK
+            printf '%b' "$(msg_prompt "输入" "IPv6 网关: ")"
+            read -r IP6_GATE
+            printf '%b' "$(msg_prompt "输入" "IPv6 DNS（默认 2001:4860:4860::8888 2606:4700:4700::1111）: ")"
+            read -r IP6_DNS
+            IP6_DNS="${IP6_DNS:-2001:4860:4860::8888 2606:4700:4700::1111}"
+        fi
     fi
 }
 
@@ -234,10 +278,14 @@ build_command_args() {
     esac
 
     [ -n "$ARCH_FLAG" ] && COMMAND_ARGS+=(-architecture "$ARCH_FLAG")
+    [ -n "$STACK_MODE" ] && [ "$STACK_MODE" != "auto" ] && COMMAND_ARGS+=(--networkstack "$STACK_MODE")
 
-    if [ "$SYSTEM" != "netboot.xyz" ]; then
+    case "$SYSTEM" in
+        netboot.xyz|windows) ;;
+        *)
         COMMAND_ARGS+=(-pwd "$PASSWORD" -port "$SSH_PORT")
-    fi
+        ;;
+    esac
     [ -n "$MIRROR" ] && COMMAND_ARGS+=(-mirror "$MIRROR")
 
     if [ -n "$IP4_ADDR" ]; then
@@ -245,23 +293,44 @@ build_command_args() {
     fi
     if [ -n "$IP6_ADDR" ]; then
         COMMAND_ARGS+=(--ip6-addr "$IP6_ADDR" --ip6-mask "$IP6_MASK" --ip6-gate "$IP6_GATE" --ip6-dns "$IP6_DNS")
-    elif [ -n "$IP4_ADDR" ]; then
+    fi
+    if [ "$STACK_MODE" = "ipv4" ]; then
         COMMAND_ARGS+=(--setipv6 0)
     fi
 }
 
 print_summary() {
     local arg=""
+    local stack_label=""
 
     draw_step_title "参数确认"
     printf "系统: %s\n" "$SYSTEM"
     [ -n "$VERSION" ] && printf "版本: %s\n" "$VERSION"
     [ -n "$ARCH_FLAG" ] && printf "架构: %s\n" "$ARCH_FLAG"
-    [ "$SYSTEM" != "netboot.xyz" ] && printf "SSH 端口: %s\n" "$SSH_PORT"
-    [ "$SYSTEM" != "netboot.xyz" ] && printf "密码: %s\n" "$PASSWORD"
+    case "$STACK_MODE" in
+        dual) stack_label="双栈" ;;
+        ipv4) stack_label="仅 IPv4" ;;
+        ipv6) stack_label="仅 IPv6" ;;
+        auto) stack_label="自动检测" ;;
+        *) stack_label="" ;;
+    esac
+    [ -n "$stack_label" ] && printf "网络栈: %s\n" "$stack_label"
+    case "$SYSTEM" in
+        netboot.xyz) ;;
+        windows)
+            printf "最终登录: Administrator / Teddysun.com\n"
+            printf "RDP 端口: 3389\n"
+            ;;
+        *)
+            printf "SSH 端口: %s\n" "$SSH_PORT"
+            printf "密码: %s\n" "$PASSWORD"
+            ;;
+    esac
     [ -n "$MIRROR" ] && printf "镜像源: %s\n" "$MIRROR"
     [ -n "$IMAGE_URL" ] && printf "自定义镜像: %s\n" "$IMAGE_URL"
-    [ -n "$WINDOWS_LANG" ] && printf "Windows 语言: %s\n" "$WINDOWS_LANG"
+    if [ "$SYSTEM" = "windows" ]; then
+        printf "Windows 语言: %s\n" "${WINDOWS_LANG:-en}"
+    fi
     [ -n "$IP4_ADDR" ] && printf "IPv4: %s / %s via %s  DNS=%s\n" "$IP4_ADDR" "$IP4_MASK" "$IP4_GATE" "$IP4_DNS"
     [ -n "$IP6_ADDR" ] && printf "IPv6: %s / %s via %s  DNS=%s\n" "$IP6_ADDR" "$IP6_MASK" "$IP6_GATE" "$IP6_DNS"
 
