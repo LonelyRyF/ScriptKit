@@ -14,6 +14,7 @@ VERSION_PROMPTED="0"
 USERNAME=""
 PASSWORD=""
 SSH_PORT="22"
+RDP_PORT="3389"
 IMAGE_URL=""
 IMAGE_NAME=""
 ISO_URL=""
@@ -130,8 +131,13 @@ collect_special_inputs() {
             }
             printf '%b' "$(msg_prompt "输入" "ISO 下载地址（可留空）: ")"
             read -r ISO_URL
-            printf '%b' "$(msg_prompt "输入" "语言代码（如 zh-cn，留空默认自动）: ")"
-            read -r LANG_CODE
+            if [ -z "$ISO_URL" ]; then
+                printf '%b' "$(msg_prompt "输入" "语言代码（如 zh-cn，留空默认 en-us）: ")"
+                read -r LANG_CODE
+                LANG_CODE="${LANG_CODE:-en-us}"
+            else
+                LANG_CODE=""
+            fi
             ;;
         ubuntu)
             if yesno_select "是否使用 Ubuntu minimal 镜像？"; then
@@ -163,7 +169,7 @@ collect_login_inputs() {
         msg_warn "DD 模式下，此密码仅用于安装过程中的 SSH 日志查看，不会修改镜像内密码"
     fi
 
-    printf '%b' "$(msg_prompt "输入" "密码（留空则由上游脚本生成随机密码）: ")"
+    printf '%b' "$(msg_prompt "输入" "密码（留空则生成随机密码）: ")"
     read -rs PASSWORD
     printf '\n'
     if [ -z "$PASSWORD" ]; then
@@ -171,12 +177,22 @@ collect_login_inputs() {
         msg_warn "未自定义密码，已生成随机密码"
     fi
 
-    printf '%b' "$(msg_prompt "输入" "SSH 端口（默认 22）: ")"
-    read -r SSH_PORT
-    SSH_PORT="${SSH_PORT:-22}"
-    if ! validate_port "$SSH_PORT"; then
-        msg_err "SSH 端口无效: $SSH_PORT"
-        exit 1
+    if [ "$SYSTEM" = "windows" ]; then
+        printf '%b' "$(msg_prompt "输入" "RDP 端口（默认 3389）: ")"
+        read -r RDP_PORT
+        RDP_PORT="${RDP_PORT:-3389}"
+        if ! validate_port "$RDP_PORT"; then
+            msg_err "RDP 端口无效: $RDP_PORT"
+            exit 1
+        fi
+    else
+        printf '%b' "$(msg_prompt "输入" "SSH 端口（默认 22）: ")"
+        read -r SSH_PORT
+        SSH_PORT="${SSH_PORT:-22}"
+        if ! validate_port "$SSH_PORT"; then
+            msg_err "SSH 端口无效: $SSH_PORT"
+            exit 1
+        fi
     fi
 }
 
@@ -200,20 +216,22 @@ build_command_args() {
             COMMAND_ARGS+=("--password" "$PASSWORD")
             ;;
         windows)
-            COMMAND_ARGS=("windows" "--username" "$USERNAME" "--image-name" "$IMAGE_NAME")
+            COMMAND_ARGS=("windows" "--image-name" "$IMAGE_NAME")
             [ -n "$ISO_URL" ] && COMMAND_ARGS+=("--iso" "$ISO_URL")
-            [ -n "$LANG_CODE" ] && COMMAND_ARGS+=("--lang" "$LANG_CODE")
-            COMMAND_ARGS+=("--ssh-port" "$SSH_PORT")
+            [ -z "$ISO_URL" ] && [ -n "$LANG_CODE" ] && COMMAND_ARGS+=("--lang" "$LANG_CODE")
+            COMMAND_ARGS+=("--username" "$USERNAME")
             COMMAND_ARGS+=("--password" "$PASSWORD")
+            COMMAND_ARGS+=("--rdp-port" "$RDP_PORT")
             ;;
         *)
-            COMMAND_ARGS=("$SYSTEM" "--username" "$USERNAME")
+            COMMAND_ARGS=("$SYSTEM")
             [ -n "$VERSION" ] && COMMAND_ARGS+=("$VERSION")
             if [ "$SYSTEM" = "ubuntu" ] && [ "$UBUNTU_MINIMAL" = "1" ]; then
                 COMMAND_ARGS+=("--minimal")
             fi
-            COMMAND_ARGS+=("--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS+=("--username" "$USERNAME")
             COMMAND_ARGS+=("--password" "$PASSWORD")
+            COMMAND_ARGS+=("--ssh-port" "$SSH_PORT")
             ;;
     esac
 }
@@ -221,6 +239,7 @@ build_command_args() {
 print_summary() {
     local arg=""
 
+    clear 2>/dev/null || printf '\033c'
     draw_step_title "参数确认"
     printf "系统/模式: %s\n" "$SYSTEM"
     [ -n "$VERSION" ] && printf "版本: %s\n" "$VERSION"
@@ -231,6 +250,25 @@ print_summary() {
     [ "$SYSTEM" = "ubuntu" ] && [ "$UBUNTU_MINIMAL" = "1" ] && printf "Ubuntu 变体: minimal\n"
     case "$SYSTEM" in
         netboot.xyz) ;;
+        windows)
+            printf "用户名: %s\n" "$USERNAME"
+            printf "密码: %s\n" "$PASSWORD"
+            printf "RDP 端口: %s\n" "$RDP_PORT"
+            [ "$USERNAME" = "administrator" ] && printf "说明: 内置 Administrator 账户的实际显示名取决于 Windows ISO 语言\n"
+            ;;
+        dd)
+            printf "安装期用户名: %s\n" "$USERNAME"
+            printf "安装期 SSH 端口: %s\n" "$SSH_PORT"
+            printf "安装期密码: %s\n" "$PASSWORD"
+            printf "安装后镜像账号信息: 取决于镜像本身\n"
+            ;;
+        fnos)
+            printf "安装期用户名: %s\n" "$USERNAME"
+            printf "安装期 SSH 端口: %s\n" "$SSH_PORT"
+            printf "安装期密码: %s\n" "$PASSWORD"
+            printf "安装后 SSH: 关闭\n"
+            printf "安装后管理入口: http://IP:5666\n"
+            ;;
         *)
             printf "用户名: %s\n" "$USERNAME"
             printf "SSH 端口: %s\n" "$SSH_PORT"
