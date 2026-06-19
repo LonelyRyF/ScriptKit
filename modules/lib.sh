@@ -233,6 +233,19 @@ restart_sshd() {
     fi
 }
 
+reboot_system_now() {
+    if command_exists systemctl; then
+        systemctl reboot
+    elif command_exists reboot; then
+        reboot
+    elif command_exists shutdown; then
+        shutdown -r now
+    else
+        msg_warn "未找到可用的重启命令，请手动重启"
+        return 1
+    fi
+}
+
 # 修改 sshd_config 中的配置项
 set_sshd_option() {
     local key="$1"

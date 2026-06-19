@@ -25,6 +25,7 @@ IP6_ADDR=""
 IP6_MASK=""
 IP6_GATE=""
 IP6_DNS=""
+AUTO_REBOOT="0"
 COMMAND_ARGS=()
 
 cleanup_temp() {
@@ -345,12 +346,15 @@ print_summary() {
 
 run_remote_script() {
     local script_file=""
+    local output_file=""
+    local status=0
 
     TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/scriptkit-installnet.XXXXXX")" || {
         msg_err "无法创建临时目录"
         exit 1
     }
     script_file="$TMP_DIR/InstallNET.sh"
+    output_file="$TMP_DIR/installnet.out"
 
     msg_info "正在下载远程重装脚本..."
     download_file "$REMOTE_URL" "$script_file" || {
@@ -358,7 +362,28 @@ run_remote_script() {
         exit 1
     }
 
-    bash "$script_file" "${COMMAND_ARGS[@]}"
+    bash "$script_file" "${COMMAND_ARGS[@]}" 2>&1 | tee "$output_file"
+    status=$?
+
+    if [ "$status" -ne 0 ]; then
+        if [ "$status" -eq 1 ] && grep -Fq "Input 'reboot' to continue the subsequential installation." "$output_file"; then
+            if [ "$AUTO_REBOOT" = "1" ]; then
+                msg_warn "远程脚本已完成，正在自动重启以继续 InstallNET 重装..."
+                reboot_system_now || return 1
+            else
+                msg_info "远程脚本已完成，等待手动重启以继续 InstallNET 重装"
+            fi
+            return 0
+        fi
+        return "$status"
+    fi
+
+    if [ "$AUTO_REBOOT" = "1" ]; then
+        msg_warn "远程脚本已完成，正在自动重启以继续 InstallNET 重装..."
+        reboot_system_now || return 1
+    else
+        msg_info "远程脚本已完成，等待手动重启以继续 InstallNET 重装"
+    fi
 }
 
 main() {
@@ -383,6 +408,10 @@ main() {
     if ! yesno_select "确认开始执行 InstallNET 重装？"; then
         msg_info "已取消"
         exit 0
+    fi
+
+    if yesno_select "脚本完成后是否自动重启以继续 InstallNET 重装？" "n"; then
+        AUTO_REBOOT="1"
     fi
 
     run_remote_script

@@ -20,6 +20,7 @@ IMAGE_NAME=""
 ISO_URL=""
 LANG_CODE=""
 UBUNTU_MINIMAL="0"
+AUTO_REBOOT="0"
 COMMAND_ARGS=()
 
 cleanup_temp() {
@@ -286,6 +287,7 @@ print_summary() {
 
 run_remote_script() {
     local script_file=""
+    local status=0
 
     TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/scriptkit-reinstall.XXXXXX")" || {
         msg_err "无法创建临时目录"
@@ -300,6 +302,18 @@ run_remote_script() {
     }
 
     bash "$script_file" "${COMMAND_ARGS[@]}"
+    status=$?
+
+    if [ "$status" -ne 0 ]; then
+        return "$status"
+    fi
+
+    if [ "$AUTO_REBOOT" = "1" ]; then
+        msg_warn "远程脚本已完成，正在自动重启以开始重装..."
+        reboot_system_now || return 1
+    else
+        msg_info "远程脚本已完成，等待手动重启以开始重装"
+    fi
 }
 
 main() {
@@ -331,6 +345,10 @@ main() {
     if ! yesno_select "确认开始执行系统重装？"; then
         msg_info "已取消"
         exit 0
+    fi
+
+    if yesno_select "脚本完成后是否自动重启以开始重装？" "n"; then
+        AUTO_REBOOT="1"
     fi
 
     run_remote_script
