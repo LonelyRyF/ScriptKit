@@ -168,4 +168,4 @@ add_action "manage_linux_mirrors_gitee" "Gitee raw（国内推荐）" "manage_li
 add_action "manage_linux_mirrors_gitcode" "GitCode raw（可能延迟）" "manage_linux_mirrors" "manage_linux_mirrors_gitcode_run"
 add_action "manage_linux_mirrors_jsdelivr" "jsDelivr CDN" "manage_linux_mirrors" "manage_linux_mirrors_jsdelivr_run"
 add_action "manage_linux_mirrors_edgeone" "EdgeOne" "manage_linux_mirrors" "manage_linux_mirrors_edgeone_run"
-add_script "manage_auto_mount_disk" "自动挂载数据盘" "manage" "modules/standalone/auto_mount_disk.sh"
+add_script "manage_disk" "磁盘管理" "manage" "modules/standalone/manage_disk.sh"

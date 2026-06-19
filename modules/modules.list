@@ -30,7 +30,7 @@ standalone/manage_crontab.sh
 standalone/manage_hostname.sh
 standalone/manage_ports.sh
 standalone/manage_services.sh
-standalone/auto_mount_disk.sh
+standalone/manage_disk.sh
 standalone/disk_test.sh
 standalone/terminal_setup.sh
 standalone/reinstall_system.sh
