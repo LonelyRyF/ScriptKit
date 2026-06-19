@@ -129,9 +129,8 @@ main() {
 
     # 备份旧配置
     if [ -f "$JAIL_LOCAL" ]; then
-        local backup="${JAIL_LOCAL}.bak.$(date +%Y%m%d%H%M%S)"
-        cp "$JAIL_LOCAL" "$backup"
-        msg_ok "旧配置已备份到: $backup"
+        sk_create_backup "$JAIL_LOCAL" "$SK_SYSTEM_BACKUP_DIR" "jail.local" >/dev/null || return 1
+        sk_rotate_backups "$SK_SYSTEM_BACKUP_DIR/jail.local.bak.*"
     fi
 
     # 写入 jail.local

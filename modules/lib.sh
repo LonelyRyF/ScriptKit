@@ -261,31 +261,18 @@ validate_ssh_config() {
 # 备份 sshd_config（带轮转，保留最近 5 个）
 # 输出备份文件路径到 stdout
 backup_ssh_config() {
-    local backup="${SSHD_CONFIG}.bak.$(date +%Y%m%d%H%M%S)"
-    cp "$SSHD_CONFIG" "$backup" || {
-        msg_err "备份失败" >&2
-        return 1
-    }
-    msg_ok "配置已备份到: $backup" >&2
-    # 轮转
-    find "$(dirname "$SSHD_CONFIG")" -maxdepth 1 -name 'sshd_config.bak.*' -type f 2>/dev/null \
-        | sort -r | tail -n +6 | while IFS= read -r old; do
-        rm -f "$old"
-    done
+    local backup=""
+
+    backup="$(sk_create_backup "$SSHD_CONFIG" "$SK_SYSTEM_BACKUP_DIR" sshd_config)" || return 1
+    sk_rotate_backups "$SK_SYSTEM_BACKUP_DIR/sshd_config.bak.*"
     printf '%s' "$backup"
 }
 
 # 回滚到指定备份
 rollback_ssh_config() {
     local backup="$1"
-    if [ -z "$backup" ] || [ ! -f "$backup" ]; then
-        msg_err "找不到备份文件，无法回滚"
-        return 1
-    fi
-    cp "$backup" "$SSHD_CONFIG" || {
-        msg_err "回滚失败"
-        return 1
-    }
+
+    sk_restore_backup "$backup" "$SSHD_CONFIG" || return 1
     msg_warn "已回滚到备份: $backup"
 }
 
