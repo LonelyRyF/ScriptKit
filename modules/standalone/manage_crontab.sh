@@ -68,6 +68,7 @@ backup_crontab() {
 
     read_current_crontab > "$backup_file"
     msg_ok "当前 crontab 已备份到: $backup_file"
+    sk_rotate_backups "$backup_dir/crontab.*"
 }
 
 format_schedule() {

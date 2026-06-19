@@ -170,6 +170,74 @@ require_root_action() {
     return 0
 }
 
+# --- 通用备份 / 轮转 / 恢复 ---
+
+# 系统级文件（/etc 下等）统一备份到此目录，避免污染配置目录。
+SK_SYSTEM_BACKUP_DIR="${SK_SYSTEM_BACKUP_DIR:-/var/backups/scriptkit}"
+
+# 创建备份。
+#   $1 源文件   $2 备份目录   $3 标签（文件名前缀，如 fstab、sshd_config）
+# 成功时把备份文件完整路径打印到 stdout；人类消息走 stderr。
+# cp 失败强制返回 1，调用方不会在备份缺失时继续覆写。
+sk_create_backup() {
+    local src="$1"
+    local dir="$2"
+    local label="$3"
+    local stamp=""
+    local backup=""
+
+    if [ ! -f "$src" ]; then
+        msg_err "源文件不存在: $src" >&2
+        return 1
+    fi
+    mkdir -p "$dir" || {
+        msg_err "无法创建备份目录: $dir" >&2
+        return 1
+    }
+    # 时间戳到秒，附加 PID 防同秒冲突。
+    stamp="$(date +%Y%m%d%H%M%S)"
+    backup="${dir}/${label}.bak.${stamp}.$$"
+    cp -p "$src" "$backup" || {
+        msg_err "备份失败: $src" >&2
+        return 1
+    }
+    msg_ok "已备份到: $backup" >&2
+    printf '%s' "$backup"
+}
+
+# 轮转：同一 glob 模式只保留最近 N 个（默认 5），其余删除。
+#   $1 glob 模式（不加引号传入，需调用方自行 quote 外层）   $2 保留数量
+sk_rotate_backups() {
+    local pattern="$1"
+    local keep="${2:-5}"
+
+    # shellcheck disable=SC2086
+    ls -1dt $pattern 2>/dev/null | tail -n +"$((keep + 1))" | while IFS= read -r old; do
+        [ -n "$old" ] && rm -f "$old"
+    done
+}
+
+# 恢复：把备份覆盖回目标。
+#   $1 备份文件   $2 目标路径   $3 可选校验函数名（校验失败返回 1，由调用方回退）
+sk_restore_backup() {
+    local backup="$1"
+    local target="$2"
+    local validator="${3:-}"
+
+    if [ -z "$backup" ] || [ ! -f "$backup" ]; then
+        msg_err "备份文件不存在，无法恢复: $backup"
+        return 1
+    fi
+    cp -p "$backup" "$target" || {
+        msg_err "恢复失败: $backup -> $target"
+        return 1
+    }
+    if [ -n "$validator" ] && ! "$validator"; then
+        return 1
+    fi
+    return 0
+}
+
 # --- SSH 配置公共函数 ---
 
 SSHD_CONFIG="${SSHD_CONFIG:-/etc/ssh/sshd_config}"
@@ -193,31 +261,18 @@ validate_ssh_config() {
 # 备份 sshd_config（带轮转，保留最近 5 个）
 # 输出备份文件路径到 stdout
 backup_ssh_config() {
-    local backup="${SSHD_CONFIG}.bak.$(date +%Y%m%d%H%M%S)"
-    cp "$SSHD_CONFIG" "$backup" || {
-        msg_err "备份失败" >&2
-        return 1
-    }
-    msg_ok "配置已备份到: $backup" >&2
-    # 轮转
-    find "$(dirname "$SSHD_CONFIG")" -maxdepth 1 -name 'sshd_config.bak.*' -type f 2>/dev/null \
-        | sort -r | tail -n +6 | while IFS= read -r old; do
-        rm -f "$old"
-    done
+    local backup=""
+
+    backup="$(sk_create_backup "$SSHD_CONFIG" "$SK_SYSTEM_BACKUP_DIR" sshd_config)" || return 1
+    sk_rotate_backups "$SK_SYSTEM_BACKUP_DIR/sshd_config.bak.*"
     printf '%s' "$backup"
 }
 
 # 回滚到指定备份
 rollback_ssh_config() {
     local backup="$1"
-    if [ -z "$backup" ] || [ ! -f "$backup" ]; then
-        msg_err "找不到备份文件，无法回滚"
-        return 1
-    fi
-    cp "$backup" "$SSHD_CONFIG" || {
-        msg_err "回滚失败"
-        return 1
-    }
+
+    sk_restore_backup "$backup" "$SSHD_CONFIG" || return 1
     msg_warn "已回滚到备份: $backup"
 }
 

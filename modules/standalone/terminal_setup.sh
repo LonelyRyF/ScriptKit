@@ -30,6 +30,7 @@ backup_bashrc() {
     fi
 
     msg_ok "已备份到: $backup_file"
+    sk_rotate_backups "$BACKUP_DIR/bashrc.*"
 }
 
 strip_managed_block() {
@@ -138,8 +139,17 @@ apply_setup() {
 restore_latest_backup() {
     local latest_backup=""
     local tmp_file=""
+    local -a backups=()
 
-    latest_backup="$(ls -1t "$BACKUP_DIR"/bashrc.* 2>/dev/null | awk 'NR == 1 { print; exit }')"
+    shopt -s nullglob
+    backups=("$BACKUP_DIR"/bashrc.*)
+    shopt -u nullglob
+    # 文件名带时间戳，字典序末位即最新。
+    if [ "${#backups[@]}" -gt 0 ]; then
+        IFS=$'\n' backups=($(printf '%s\n' "${backups[@]}" | sort))
+        unset IFS
+        latest_backup="${backups[${#backups[@]} - 1]}"
+    fi
     if [ -n "$latest_backup" ] && [ -f "$latest_backup" ]; then
         cp "$latest_backup" "$TARGET_BASHRC" || {
             msg_err "恢复备份失败"

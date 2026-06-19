@@ -10,7 +10,7 @@ BACKUPS=()
 
 collect_backups() {
     shopt -s nullglob
-    BACKUPS=("${SSHD_CONFIG}".bak.*)
+    BACKUPS=("$SK_SYSTEM_BACKUP_DIR"/sshd_config.bak.*)
     shopt -u nullglob
 }
 
@@ -104,7 +104,7 @@ main() {
 
     collect_backups
     if [ "${#BACKUPS[@]}" -eq 0 ]; then
-        msg_warn "未找到备份文件: ${SSHD_CONFIG}.bak.*"
+        msg_warn "未找到备份文件: $SK_SYSTEM_BACKUP_DIR/sshd_config.bak.*"
         exit 0
     fi
 

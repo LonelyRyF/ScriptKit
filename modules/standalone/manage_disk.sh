@@ -21,7 +21,7 @@ MOUNT_POINT_CREATED=0
 MOUNTED_BY_SCRIPT=0
 TARGET_MOUNT_POINT=""
 
-# 每次挂载操作前重置状态，避免上一次菜单操作的残留影响本次回滚判断。
+# 每次操作前后都清理临时回滚状态，避免后续异常退出误撤销已成功的变更。
 reset_mount_state() {
     FSTAB_BACKUP=""
     MOUNT_POINT_CREATED=0
@@ -120,6 +120,31 @@ is_root_device() {
             fi
             ;;
     esac
+
+    return 1
+}
+
+is_system_mountpoint() {
+    local mount_point="$1"
+
+    case "$mount_point" in
+        ""|"/"|"/boot"|"/boot/"*|"/efi"|"/efi/"*|"/usr"|"/usr/"*|"/var"|"/var/"*|"/etc"|"/etc/"*|"/home"|"/home/"*|"/opt"|"/opt/"*|"/srv"|"/srv/"*|"/root"|"/root/"*|"/tmp"|"/tmp/"*|"/lib"|"/lib/"*|"/lib64"|"/lib64/"*|"/bin"|"/bin/"*|"/sbin"|"/sbin/"*|"/run"|"/run/"*|"/proc"|"/proc/"*|"/sys"|"/sys/"*|"/dev"|"/dev/"*|"/snap"|"/snap/"*|"[SWAP]")
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+device_has_system_mountpoints() {
+    local device="$1"
+    local name=""
+    local mountpoint=""
+
+    while IFS=$'\t' read -r name mountpoint; do
+        [ -n "$mountpoint" ] || continue
+        is_system_mountpoint "$mountpoint" && return 0
+    done < <(lsblk -nrpo NAME,MOUNTPOINT "$device" 2>/dev/null | awk 'NF >= 2 { print $1 "\t" $2 }')
 
     return 1
 }
@@ -250,6 +275,7 @@ collect_candidate_disks() {
         [ -n "$disk" ] || continue
         [ "$disk" = "$root_disk" ] && continue
         is_root_device "$disk" && continue
+        device_has_system_mountpoints "$disk" && continue
 
         CANDIDATE_DISKS+=("$disk")
         CANDIDATE_LABELS+=("$(disk_label "$disk")")
@@ -356,15 +382,11 @@ filesystem_fsck_pass() {
 }
 
 backup_fstab() {
-    local backup="/etc/fstab.scriptkit.bak.$(date +%Y%m%d%H%M%S)"
+    local backup=""
 
-    cp /etc/fstab "$backup" || {
-        msg_err "备份 /etc/fstab 失败"
-        return 1
-    }
-
+    backup="$(sk_create_backup /etc/fstab "$SK_SYSTEM_BACKUP_DIR" fstab)" || return 1
     FSTAB_BACKUP="$backup"
-    msg_ok "/etc/fstab 已备份到: $backup"
+    sk_rotate_backups "$SK_SYSTEM_BACKUP_DIR/fstab.bak.*"
 }
 
 validate_mount_point() {
@@ -736,6 +758,8 @@ do_mount_data_disk() {
 
     if [ "$rc" -ne 0 ]; then
         rollback_mount_state
+    else
+        reset_mount_state
     fi
     return "$rc"
 }
@@ -755,10 +779,7 @@ collect_mounted_devices() {
         [ -n "$name" ] || continue
         [ -n "$mountpoint" ] || continue
 
-        case "$mountpoint" in
-            /|/boot|/boot/*|/usr|/var|/etc|[SWAP]|"[SWAP]") continue ;;
-        esac
-
+        is_system_mountpoint "$mountpoint" && continue
         is_root_device "$name" && continue
         is_partition_of_root_disk "$name" && continue
 
@@ -827,6 +848,8 @@ collect_stale_fstab_entries() {
             *) continue ;;
         esac
 
+        is_system_mountpoint "$mount_point" && continue
+
         # 只对能确定"设备不存在"的条目判失效；解析工具缺失（返回 2）时保守跳过。
         resolve_fstab_spec "$spec" >/dev/null 2>&1
         [ "$?" -eq 1 ] || continue
@@ -860,9 +883,7 @@ collect_blockdev_fstab_entries() {
             *) continue ;;
         esac
 
-        case "$mount_point" in
-            /|/boot|/boot/*|/usr|/var|/etc) continue ;;
-        esac
+        is_system_mountpoint "$mount_point" && continue
 
         FSTAB_ENTRY_LINES+=("$line")
         FSTAB_ENTRY_LABELS+=("$spec  ->  ${mount_point:-?}  (${fstype:-?})")
@@ -964,6 +985,11 @@ remove_fstab_by_mountpoint() {
     local mount_point="$1"
     local -a targets=()
     local line=""
+
+    if is_system_mountpoint "$mount_point"; then
+        msg_err "拒绝移除系统挂载点的 fstab 条目: $mount_point"
+        return 1
+    fi
 
     while IFS= read -r line; do
         case "$line" in
@@ -1488,6 +1514,8 @@ main() {
             3) do_format_fsck_resize || true ;;
             *) msg_warn "无效选择" ;;
         esac
+
+        reset_mount_state
 
         printf '\n%b' "$(msg_prompt "提示" "按 Enter 继续...")"
         read -r _
