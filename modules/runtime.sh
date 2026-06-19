@@ -338,10 +338,18 @@ multiselect_menu() {
         local input=""
         local num=""
         read -r input
-        for ((i = 0; i < count; i++)); do _selected[$i]=0; done
+
+        if [ -z "${input:-}" ]; then
+            return 0
+        fi
+
         for num in $input; do
             if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "$count" ]; then
-                _selected[$((num - 1))]=1
+                if [ "${_selected[$((num - 1))]}" = "1" ]; then
+                    _selected[$((num - 1))]=0
+                else
+                    _selected[$((num - 1))]=1
+                fi
             fi
         done
         return 0
