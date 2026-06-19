@@ -303,6 +303,7 @@ print_summary() {
     local arg=""
     local stack_label=""
 
+    clear 2>/dev/null || printf '\033c'
     draw_step_title "参数确认"
     printf "系统: %s\n" "$SYSTEM"
     [ -n "$VERSION" ] && printf "版本: %s\n" "$VERSION"
