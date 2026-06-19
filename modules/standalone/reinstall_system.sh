@@ -10,7 +10,9 @@ REMOTE_URL="https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall
 TMP_DIR=""
 SYSTEM=""
 VERSION=""
-PASSWORD="123@@@"
+VERSION_PROMPTED="0"
+USERNAME=""
+PASSWORD=""
 SSH_PORT="22"
 IMAGE_URL=""
 IMAGE_NAME=""
@@ -23,6 +25,22 @@ cleanup_temp() {
     if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then
         rm -rf "$TMP_DIR"
     fi
+}
+
+supports_version_selection() {
+    case "$SYSTEM" in
+        ubuntu|debian|centos|alpine|fedora|opensuse|almalinux|rocky|oracle|anolis|opencloudos|nixos|openeuler|fnos)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+generate_password() {
+    local chars='A-Za-z0-9~!@#$%^&*_=+`|(){}[]:;"<>,.?/-'
+    tr -dc "$chars" </dev/urandom | head -c16
 }
 
 handle_interrupt() {
@@ -51,7 +69,7 @@ select_version() {
     declare -A versions=(
         [ubuntu]="26.04 24.04 22.04 20.04 18.04"
         [debian]="13 12 11 10 9"
-        [centos]="10 9"
+        [centos]="10 9 7"
         [alpine]="3.23 3.22 3.21 3.20"
         [fedora]="44 43"
         [opensuse]="tumbleweed 16.0"
@@ -66,16 +84,17 @@ select_version() {
     )
 
     [ -n "${versions[$SYSTEM]:-}" ] || return 0
+    VERSION_PROMPTED="1"
     read -r -a options <<< "${versions[$SYSTEM]}"
-    options+=("手动输入" "跳过")
+    options+=("手动输入" "使用默认版本")
 
     choice="$(pick_from_options "选择 ${SYSTEM} 版本" "${options[@]}")" || exit 0
     case "$choice" in
         手动输入)
-            printf '%b' "$(msg_prompt "输入" "请输入版本号（留空则跳过）: ")"
+            printf '%b' "$(msg_prompt "输入" "请输入版本号（留空则使用默认版本）: ")"
             read -r VERSION
             ;;
-        跳过)
+        使用默认版本)
             VERSION=""
             ;;
         *)
@@ -123,18 +142,33 @@ collect_special_inputs() {
 }
 
 collect_login_inputs() {
+    local default_username=""
+
     case "$SYSTEM" in
         netboot.xyz)
             return 0
             ;;
     esac
 
-    printf '%b' "$(msg_prompt "输入" "root 密码（留空默认 123@@@）: ")"
+    case "$SYSTEM" in
+        windows) default_username="administrator" ;;
+        *) default_username="root" ;;
+    esac
+
+    printf '%b' "$(msg_prompt "输入" "用户名（留空默认 ${default_username}）: ")"
+    read -r USERNAME
+    USERNAME="${USERNAME:-$default_username}"
+
+    if [ "$SYSTEM" = "dd" ]; then
+        msg_warn "DD 模式下，此密码仅用于安装过程中的 SSH 日志查看，不会修改镜像内密码"
+    fi
+
+    printf '%b' "$(msg_prompt "输入" "密码（留空则由上游脚本生成随机密码）: ")"
     read -rs PASSWORD
     printf '\n'
-    PASSWORD="${PASSWORD:-123@@@}"
-    if [ "$PASSWORD" = "123@@@" ]; then
-        msg_warn "未自定义密码，将使用默认密码 123@@@"
+    if [ -z "$PASSWORD" ]; then
+        PASSWORD="$(generate_password)"
+        msg_warn "未自定义密码，已生成随机密码"
     fi
 
     printf '%b' "$(msg_prompt "输入" "SSH 端口（默认 22）: ")"
@@ -151,30 +185,35 @@ build_command_args() {
 
     case "$SYSTEM" in
         dd)
-            COMMAND_ARGS=("dd" "--img" "$IMAGE_URL" "--password" "$PASSWORD" "--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS=("dd" "--username" "$USERNAME" "--img" "$IMAGE_URL" "--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS+=("--password" "$PASSWORD")
             ;;
         alpine-live)
-            COMMAND_ARGS=("alpine" "--password" "$PASSWORD" "--ssh-port" "$SSH_PORT" "--hold=1")
+            COMMAND_ARGS=("alpine" "--username" "$USERNAME" "--ssh-port" "$SSH_PORT" "--hold=1")
+            COMMAND_ARGS+=("--password" "$PASSWORD")
             ;;
         netboot.xyz)
             COMMAND_ARGS=("netboot.xyz")
             ;;
         redhat)
-            COMMAND_ARGS=("redhat" "--img" "$IMAGE_URL" "--password" "$PASSWORD" "--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS=("redhat" "--username" "$USERNAME" "--img" "$IMAGE_URL" "--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS+=("--password" "$PASSWORD")
             ;;
         windows)
-            COMMAND_ARGS=("windows" "--image-name" "$IMAGE_NAME")
+            COMMAND_ARGS=("windows" "--username" "$USERNAME" "--image-name" "$IMAGE_NAME")
             [ -n "$ISO_URL" ] && COMMAND_ARGS+=("--iso" "$ISO_URL")
             [ -n "$LANG_CODE" ] && COMMAND_ARGS+=("--lang" "$LANG_CODE")
-            COMMAND_ARGS+=("--password" "$PASSWORD" "--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS+=("--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS+=("--password" "$PASSWORD")
             ;;
         *)
-            COMMAND_ARGS=("$SYSTEM")
+            COMMAND_ARGS=("$SYSTEM" "--username" "$USERNAME")
             [ -n "$VERSION" ] && COMMAND_ARGS+=("$VERSION")
             if [ "$SYSTEM" = "ubuntu" ] && [ "$UBUNTU_MINIMAL" = "1" ]; then
                 COMMAND_ARGS+=("--minimal")
             fi
-            COMMAND_ARGS+=("--password" "$PASSWORD" "--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS+=("--ssh-port" "$SSH_PORT")
+            COMMAND_ARGS+=("--password" "$PASSWORD")
             ;;
     esac
 }
@@ -193,6 +232,7 @@ print_summary() {
     case "$SYSTEM" in
         netboot.xyz) ;;
         *)
+            printf "用户名: %s\n" "$USERNAME"
             printf "SSH 端口: %s\n" "$SSH_PORT"
             printf "密码: %s\n" "$PASSWORD"
             ;;
@@ -242,10 +282,9 @@ main() {
         *) select_version ;;
     esac
 
-    case "$SYSTEM" in
-        redhat) ;;
-        *) [ -n "$VERSION" ] || select_version ;;
-    esac
+    if supports_version_selection && [ "$VERSION_PROMPTED" != "1" ]; then
+        select_version
+    fi
 
     collect_login_inputs
     build_command_args
